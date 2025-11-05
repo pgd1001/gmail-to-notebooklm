@@ -1,0 +1,207 @@
+"""Email MIME parsing and header extraction."""
+
+import base64
+from email.utils import parsedate_to_datetime
+from typing import Dict, List, Optional
+
+
+class EmailParseError(Exception):
+    """Raised when email parsing fails."""
+    pass
+
+
+class EmailParser:
+    """
+    Parser for Gmail API message format.
+
+    Extracts headers, body content, and metadata from Gmail messages.
+    """
+
+    @staticmethod
+    def get_header(headers: List[Dict], name: str) -> Optional[str]:
+        """
+        Extract a specific header value from headers list.
+
+        Args:
+            headers: List of header dictionaries from Gmail API
+            name: Header name (case-insensitive)
+
+        Returns:
+            Header value if found, None otherwise
+        """
+        name_lower = name.lower()
+        for header in headers:
+            if header.get("name", "").lower() == name_lower:
+                return header.get("value")
+        return None
+
+    def parse_message(self, message: Dict) -> Dict[str, any]:
+        """
+        Parse a Gmail API message into structured format.
+
+        Args:
+            message: Raw message from Gmail API
+
+        Returns:
+            Dictionary containing:
+            - id: Message ID
+            - thread_id: Thread ID
+            - from: Sender email and name
+            - to: Recipient email and name
+            - cc: CC recipients (if present)
+            - subject: Email subject
+            - date: Email date (ISO format)
+            - body_html: HTML body content
+            - body_text: Plain text body content
+
+        Raises:
+            EmailParseError: If parsing fails
+        """
+        try:
+            payload = message.get("payload", {})
+            headers = payload.get("headers", [])
+
+            # Extract headers
+            parsed = {
+                "id": message.get("id"),
+                "thread_id": message.get("threadId"),
+                "from": self.get_header(headers, "From"),
+                "to": self.get_header(headers, "To"),
+                "cc": self.get_header(headers, "Cc"),
+                "subject": self.get_header(headers, "Subject") or "(No Subject)",
+                "date": self.get_header(headers, "Date"),
+            }
+
+            # Parse date to ISO format
+            if parsed["date"]:
+                try:
+                    dt = parsedate_to_datetime(parsed["date"])
+                    parsed["date_iso"] = dt.isoformat()
+                except Exception:
+                    parsed["date_iso"] = parsed["date"]
+            else:
+                parsed["date_iso"] = "Unknown"
+
+            # Extract body content
+            body_html, body_text = self._extract_body(payload)
+            parsed["body_html"] = body_html
+            parsed["body_text"] = body_text
+
+            return parsed
+
+        except Exception as e:
+            raise EmailParseError(f"Failed to parse message: {e}")
+
+    def _extract_body(self, payload: Dict) -> tuple[Optional[str], Optional[str]]:
+        """
+        Extract HTML and plain text body from message payload.
+
+        Args:
+            payload: Message payload from Gmail API
+
+        Returns:
+            Tuple of (html_body, text_body)
+        """
+        html_body = None
+        text_body = None
+
+        # Check if body is directly in payload
+        if "body" in payload and payload["body"].get("data"):
+            mime_type = payload.get("mimeType", "")
+            body_data = payload["body"]["data"]
+            decoded = self._decode_body(body_data)
+
+            if "html" in mime_type.lower():
+                html_body = decoded
+            else:
+                text_body = decoded
+
+        # Check multipart message
+        if "parts" in payload:
+            html_body, text_body = self._extract_from_parts(payload["parts"])
+
+        return html_body, text_body
+
+    def _extract_from_parts(
+        self, parts: List[Dict]
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        Recursively extract body from multipart message.
+
+        Args:
+            parts: List of message parts
+
+        Returns:
+            Tuple of (html_body, text_body)
+        """
+        html_body = None
+        text_body = None
+
+        for part in parts:
+            mime_type = part.get("mimeType", "")
+
+            # Recursively process nested parts
+            if "parts" in part:
+                nested_html, nested_text = self._extract_from_parts(part["parts"])
+                if nested_html:
+                    html_body = nested_html
+                if nested_text:
+                    text_body = nested_text
+                continue
+
+            # Extract body data
+            if "body" in part and part["body"].get("data"):
+                body_data = part["body"]["data"]
+                decoded = self._decode_body(body_data)
+
+                if "text/html" in mime_type:
+                    html_body = decoded
+                elif "text/plain" in mime_type:
+                    text_body = decoded
+
+        return html_body, text_body
+
+    @staticmethod
+    def _decode_body(data: str) -> str:
+        """
+        Decode base64url encoded body data.
+
+        Args:
+            data: Base64url encoded string
+
+        Returns:
+            Decoded string
+        """
+        try:
+            # Gmail uses base64url encoding (- and _ instead of + and /)
+            decoded_bytes = base64.urlsafe_b64decode(data)
+            return decoded_bytes.decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"[Error decoding body: {e}]"
+
+    def parse_messages_batch(self, messages: List[Dict]) -> List[Dict]:
+        """
+        Parse multiple messages.
+
+        Args:
+            messages: List of raw Gmail API messages
+
+        Returns:
+            List of parsed message dictionaries
+
+        Raises:
+            EmailParseError: If parsing fails for any message
+        """
+        parsed_messages = []
+
+        for i, message in enumerate(messages, 1):
+            print(f"Parsing message {i}/{len(messages)}...", end="\r")
+            try:
+                parsed = self.parse_message(message)
+                parsed_messages.append(parsed)
+            except EmailParseError as e:
+                print(f"\nWarning: Failed to parse message {message.get('id')}: {e}")
+                continue
+
+        print()  # New line after progress
+        return parsed_messages

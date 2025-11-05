@@ -1,0 +1,110 @@
+# Sample Configuration File for Gmail to NotebookLM Converter
+# Copy to .gmail-to-notebooklm.yaml and customize
+
+# Default output directory
+output_dir: "./exports"
+
+# Maximum results per label (0 or null = unlimited)
+max_results: 1000
+
+# Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+log_level: "INFO"
+
+# Credentials and token paths
+credentials_path: "./credentials.json"
+token_path: "./token.json"
+
+# Output file naming
+filename_template: "{subject}_{id}"
+max_filename_length: 200
+
+# Markdown conversion options
+markdown:
+  # Preserve links
+  preserve_links: true
+
+  # Include email headers in output
+  include_headers: true
+
+  # Wrap text at column (0 = no wrapping)
+  wrap_width: 0
+
+  # Convert HTML entities
+  decode_entities: true
+
+  # Strong emphasis mark
+  strong_mark: "**"
+
+  # Emphasis mark
+  emphasis_mark: "*"
+
+  # Unordered list style
+  ul_style: "-"
+
+# Email filtering
+filters:
+  # Only process emails newer than this date (YYYY-MM-DD)
+  date_after: null
+
+  # Only process emails older than this date
+  date_before: null
+
+  # Exclude emails from specific senders
+  exclude_senders: []
+
+  # Include only emails from specific senders
+  include_senders: []
+
+# Performance options
+performance:
+  # Number of concurrent API requests
+  max_workers: 5
+
+  # Retry failed requests
+  max_retries: 3
+
+  # Delay between requests (seconds)
+  request_delay: 0.1
+
+  # Batch size for list operations
+  batch_size: 100
+
+# Output options
+output:
+  # Create subdirectories by year/month
+  organize_by_date: false
+
+  # Overwrite existing files
+  overwrite: false
+
+  # Create index file with all emails
+  create_index: false
+
+# Header format
+headers:
+  # Include headers in output
+  enabled: true
+
+  # Header fields to include
+  fields:
+    - from
+    - to
+    - cc
+    - subject
+    - date
+
+  # Date format
+  date_format: "%a, %d %b %Y %H:%M:%S %z"
+
+# Logging configuration
+logging:
+  # Log to file
+  file: null
+
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Rotate log files
+  rotate: false
+  max_bytes: 10485760  # 10 MB
+  backup_count: 5

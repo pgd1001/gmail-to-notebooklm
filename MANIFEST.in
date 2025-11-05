@@ -1,0 +1,68 @@
+# MANIFEST.in
+# Specifies additional files to include in source distributions
+
+# Include documentation
+include README.md
+include LICENSE
+include CLAUDE.md
+include CHANGELOG.md
+
+# Include setup files
+include pyproject.toml
+include setup.py
+include requirements.txt
+
+# Include documentation files
+include INSTALLATION.md
+include OAUTH_SETUP.md
+include USAGE.md
+include CONFIGURATION.md
+include QUICKSTART.md
+include DEVELOPMENT.md
+
+# Include configuration examples
+include .env.example
+include .flake8
+include pytest.ini
+
+# Include test fixtures (but not test code itself)
+recursive-include tests/fixtures *
+
+# Exclude compiled Python files
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude *.so
+
+# Exclude version control
+global-exclude .git*
+
+# Exclude IDE files
+global-exclude .vscode
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+
+# Exclude sensitive files
+exclude credentials.json
+exclude token.json
+exclude token.pickle
+exclude client_secret*.json
+
+# Exclude build artifacts
+global-exclude *.egg-info
+global-exclude build
+global-exclude dist
+
+# Exclude test and coverage artifacts
+global-exclude .pytest_cache
+global-exclude .coverage
+global-exclude htmlcov
+
+# Exclude virtual environments
+global-exclude .venv
+global-exclude venv
+global-exclude env
+
+# Exclude output directories
+global-exclude output
+global-exclude exports

@@ -1,9 +1,3 @@
-Understood. This is a great refinement for NotebookLM! Adding relevant header information as part of the Markdown content will significantly improve the context for analysis.
-
-Here's the updated PRD, with specific additions under "3.3. Email Content Extraction & Markdown Conversion" and a slight tweak to "3.4. File Output & Storage".
-
----
-
 ## Product Requirements Document: Gmail Label to Markdown Converter for NotebookLM
 
 **Product Name:** Email Archiver for NotebookLM (or similar)

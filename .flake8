@@ -1,0 +1,73 @@
+[flake8]
+# Flake8 configuration
+
+# Maximum line length (match Black)
+max-line-length = 88
+
+# Maximum complexity
+max-complexity = 10
+
+# Extend default ignore list
+extend-ignore =
+    # E203: whitespace before ':' (conflicts with Black)
+    E203,
+    # E501: line too long (handled by Black)
+    E501,
+    # W503: line break before binary operator (conflicts with Black)
+    W503,
+    # E402: module level import not at top of file
+    # (useful for conditional imports)
+    # E402,
+
+# Exclude directories
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .env,
+    .tox,
+    build,
+    dist,
+    *.egg-info,
+    .pytest_cache,
+    .mypy_cache,
+    .coverage,
+    htmlcov,
+    docs,
+    migrations,
+    # Test fixtures may have unusual formatting
+    tests/fixtures,
+
+# Files to check
+filename =
+    *.py
+
+# Count errors
+count = True
+
+# Show source code for each error
+show-source = True
+
+# Show relevant text from flake8 documentation
+show-pep8 = True
+
+# Print total number of errors
+statistics = True
+
+# Per-file ignores
+per-file-ignores =
+    # Allow unused imports in __init__.py
+    __init__.py:F401,F403
+    # Test files can have longer lines and unused imports
+    tests/*:E501,F401,F811
+    # Setup.py can have imports not at top
+    setup.py:E402
+
+# Error codes reference:
+# E: PEP 8 errors
+# W: PEP 8 warnings
+# F: PyFlakes errors (undefined names, unused imports, etc.)
+# C: McCabe complexity
+# N: PEP 8 naming conventions
