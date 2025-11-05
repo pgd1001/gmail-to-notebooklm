@@ -44,6 +44,12 @@ from gmail_to_notebooklm.utils import (
     help="Gmail label to export (case-sensitive)",
 )
 @click.option(
+    "--query",
+    "-q",
+    default=None,
+    help="Gmail search query (uses Gmail search syntax)",
+)
+@click.option(
     "--output-dir",
     "-o",
     default=None,
@@ -84,6 +90,7 @@ from gmail_to_notebooklm.utils import (
 def cli(
     config: Optional[str],
     label: Optional[str],
+    query: Optional[str],
     output_dir: Optional[str],
     max_results: Optional[int],
     credentials: Optional[str],
@@ -117,6 +124,7 @@ def cli(
         # Merge CLI args with config (CLI takes precedence)
         cli_args = {
             "label": label,
+            "query": query,
             "output_dir": output_dir,
             "max_results": max_results,
             "credentials": credentials,
@@ -128,6 +136,7 @@ def cli(
 
         # Extract settings
         label = settings.get("label")
+        query = settings.get("query")
         output_dir = settings.get("output_dir")
         max_results = settings.get("max_results")
         credentials = settings.get("credentials", "credentials.json")
@@ -136,8 +145,11 @@ def cli(
         overwrite = settings.get("overwrite", False)
 
         # Validate required fields
-        if not label:
-            click.echo("✗ Error: --label is required (or set in config file)", err=True)
+        if not label and not query:
+            click.echo(
+                "✗ Error: Either --label or --query is required (or set in config file)",
+                err=True,
+            )
             sys.exit(1)
 
         # Determine output directory with fallback
@@ -148,7 +160,10 @@ def cli(
 
         if verbose:
             click.echo(f"Gmail to NotebookLM Converter v{__version__}")
-            click.echo(f"Label: {label}")
+            if label:
+                click.echo(f"Label: {label}")
+            if query:
+                click.echo(f"Query: {query}")
             click.echo(f"Output directory: {output_path}")
             if max_results:
                 click.echo(f"Max results: {max_results}")
@@ -177,12 +192,20 @@ def cli(
             sys.exit(1)
 
         # Step 3: Fetch emails
-        click.echo(f"\nStep 3/5: Fetching emails from label '{label}'...")
+        if label and query:
+            search_desc = f"label '{label}' with query: {query}"
+        elif label:
+            search_desc = f"label '{label}'"
+        else:
+            search_desc = f"query: {query}"
+
+        click.echo(f"\nStep 3/5: Fetching emails from {search_desc}...")
         try:
-            messages = client.get_messages_batch(label, max_results)
+            messages = client.get_messages_batch(label, max_results, query)
             if not messages:
-                click.echo(f"No emails found in label '{label}'")
-                click.echo("\nTip: Label names are case-sensitive.")
+                click.echo(f"No emails found matching {search_desc}")
+                if label:
+                    click.echo("\nTip: Label names are case-sensitive.")
                 sys.exit(0)
             click.echo(f"✓ Found {len(messages)} email(s)")
         except GmailAPIError as e:

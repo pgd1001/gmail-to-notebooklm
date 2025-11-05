@@ -4,6 +4,10 @@
 # Gmail label to export (can be overridden with --label)
 label: "Client A"
 
+# Gmail search query (uses Gmail search syntax)
+# Either label or query is required, or both can be used together
+# query: "from:client@example.com has:attachment"
+
 # Output directory for Markdown files
 output_dir: "./exports"
 
