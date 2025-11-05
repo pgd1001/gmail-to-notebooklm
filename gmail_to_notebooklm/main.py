@@ -18,6 +18,7 @@ if sys.platform == "win32":
 
 from gmail_to_notebooklm import __version__
 from gmail_to_notebooklm.auth import authenticate, AuthenticationError
+from gmail_to_notebooklm.config import load_config, ConfigError
 from gmail_to_notebooklm.converter import MarkdownConverter, ConversionError
 from gmail_to_notebooklm.gmail_client import GmailClient, GmailAPIError
 from gmail_to_notebooklm.parser import EmailParser, EmailParseError
@@ -30,9 +31,16 @@ from gmail_to_notebooklm.utils import (
 
 @click.command()
 @click.option(
+    "--config",
+    "-c",
+    default=None,
+    type=click.Path(exists=True),
+    help="Path to YAML configuration file",
+)
+@click.option(
     "--label",
     "-l",
-    required=True,
+    default=None,
     help="Gmail label to export (case-sensitive)",
 )
 @click.option(
@@ -51,13 +59,13 @@ from gmail_to_notebooklm.utils import (
 )
 @click.option(
     "--credentials",
-    default="credentials.json",
+    default=None,
     type=click.Path(exists=True),
     help="Path to credentials.json (default: ./credentials.json)",
 )
 @click.option(
     "--token",
-    default="token.json",
+    default=None,
     type=click.Path(),
     help="Path to save/load token (default: ./token.json)",
 )
@@ -74,11 +82,12 @@ from gmail_to_notebooklm.utils import (
 )
 @click.version_option(version=__version__)
 def cli(
-    label: str,
+    config: Optional[str],
+    label: Optional[str],
     output_dir: Optional[str],
     max_results: Optional[int],
-    credentials: str,
-    token: str,
+    credentials: Optional[str],
+    token: Optional[str],
     verbose: bool,
     overwrite: bool,
 ):
@@ -96,7 +105,42 @@ def cli(
     First run will open a browser for Gmail authorization.
     """
     try:
-        # Determine output directory
+        # Load configuration
+        try:
+            cfg = load_config(config)
+            if verbose or cfg.get("verbose", False):
+                click.echo(f"Loaded configuration from: {cfg.config_path or 'defaults'}")
+        except ConfigError as e:
+            click.echo(f"✗ Configuration error: {e}", err=True)
+            sys.exit(1)
+
+        # Merge CLI args with config (CLI takes precedence)
+        cli_args = {
+            "label": label,
+            "output_dir": output_dir,
+            "max_results": max_results,
+            "credentials": credentials,
+            "token": token,
+            "verbose": verbose,
+            "overwrite": overwrite,
+        }
+        settings = cfg.merge_with_cli_args(cli_args)
+
+        # Extract settings
+        label = settings.get("label")
+        output_dir = settings.get("output_dir")
+        max_results = settings.get("max_results")
+        credentials = settings.get("credentials", "credentials.json")
+        token = settings.get("token", "token.json")
+        verbose = settings.get("verbose", False)
+        overwrite = settings.get("overwrite", False)
+
+        # Validate required fields
+        if not label:
+            click.echo("✗ Error: --label is required (or set in config file)", err=True)
+            sys.exit(1)
+
+        # Determine output directory with fallback
         if output_dir is None:
             output_dir = get_env_or_default("GMAIL_TO_NBL_OUTPUT_DIR", "./output")
 
