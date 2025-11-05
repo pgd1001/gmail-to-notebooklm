@@ -26,6 +26,7 @@ from gmail_to_notebooklm.utils import (
     create_filename,
     write_markdown_file,
     get_env_or_default,
+    build_date_query,
 )
 
 
@@ -48,6 +49,16 @@ from gmail_to_notebooklm.utils import (
     "-q",
     default=None,
     help="Gmail search query (uses Gmail search syntax)",
+)
+@click.option(
+    "--after",
+    default=None,
+    help="Filter emails after this date (YYYY-MM-DD or YYYY/MM/DD)",
+)
+@click.option(
+    "--before",
+    default=None,
+    help="Filter emails before this date (YYYY-MM-DD or YYYY/MM/DD)",
 )
 @click.option(
     "--output-dir",
@@ -91,6 +102,8 @@ def cli(
     config: Optional[str],
     label: Optional[str],
     query: Optional[str],
+    after: Optional[str],
+    before: Optional[str],
     output_dir: Optional[str],
     max_results: Optional[int],
     credentials: Optional[str],
@@ -125,6 +138,8 @@ def cli(
         cli_args = {
             "label": label,
             "query": query,
+            "after": after,
+            "before": before,
             "output_dir": output_dir,
             "max_results": max_results,
             "credentials": credentials,
@@ -137,6 +152,8 @@ def cli(
         # Extract settings
         label = settings.get("label")
         query = settings.get("query")
+        after = settings.get("after")
+        before = settings.get("before")
         output_dir = settings.get("output_dir")
         max_results = settings.get("max_results")
         credentials = settings.get("credentials", "credentials.json")
@@ -145,12 +162,26 @@ def cli(
         overwrite = settings.get("overwrite", False)
 
         # Validate required fields
-        if not label and not query:
+        if not label and not query and not after and not before:
             click.echo(
-                "✗ Error: Either --label or --query is required (or set in config file)",
+                "✗ Error: At least one filter is required: --label, --query, --after, or --before",
                 err=True,
             )
             sys.exit(1)
+
+        # Build date query if date filters provided
+        try:
+            date_query = build_date_query(after, before) if (after or before) else None
+        except ValueError as e:
+            click.echo(f"✗ Date validation error: {e}", err=True)
+            sys.exit(1)
+
+        # Combine queries if multiple provided
+        if date_query:
+            if query:
+                query = f"{query} {date_query}"
+            else:
+                query = date_query
 
         # Determine output directory with fallback
         if output_dir is None:
@@ -164,6 +195,10 @@ def cli(
                 click.echo(f"Label: {label}")
             if query:
                 click.echo(f"Query: {query}")
+            if after:
+                click.echo(f"After: {after}")
+            if before:
+                click.echo(f"Before: {before}")
             click.echo(f"Output directory: {output_path}")
             if max_results:
                 click.echo(f"Max results: {max_results}")

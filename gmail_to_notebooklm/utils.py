@@ -1,6 +1,7 @@
 """Utility functions for file operations and text sanitization."""
 
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -237,3 +238,71 @@ def get_env_or_default(key: str, default: Optional[str] = None) -> Optional[str]
     import os
 
     return os.environ.get(key, default)
+
+
+def validate_date(date_str: str) -> str:
+    """
+    Validate and normalize date string for Gmail query.
+
+    Accepts YYYY-MM-DD or YYYY/MM/DD format.
+
+    Args:
+        date_str: Date string to validate
+
+    Returns:
+        Normalized date string in YYYY/MM/DD format
+
+    Raises:
+        ValueError: If date format is invalid
+
+    Example:
+        >>> validate_date("2024-01-15")
+        '2024/01/15'
+        >>> validate_date("2024/01/15")
+        '2024/01/15'
+    """
+    # Try parsing with different formats
+    for fmt in ["%Y-%m-%d", "%Y/%m/%d"]:
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            # Return in Gmail-compatible format (YYYY/MM/DD)
+            return dt.strftime("%Y/%m/%d")
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Invalid date format: '{date_str}'. Use YYYY-MM-DD or YYYY/MM/DD"
+    )
+
+
+def build_date_query(after: Optional[str] = None, before: Optional[str] = None) -> str:
+    """
+    Build Gmail query string from date filters.
+
+    Args:
+        after: Filter emails after this date (YYYY-MM-DD or YYYY/MM/DD)
+        before: Filter emails before this date (YYYY-MM-DD or YYYY/MM/DD)
+
+    Returns:
+        Gmail query string for date filtering
+
+    Raises:
+        ValueError: If date format is invalid
+
+    Example:
+        >>> build_date_query(after="2024-01-01")
+        'after:2024/01/01'
+        >>> build_date_query(after="2024-01-01", before="2024-12-31")
+        'after:2024/01/01 before:2024/12/31'
+    """
+    parts = []
+
+    if after:
+        normalized_date = validate_date(after)
+        parts.append(f"after:{normalized_date}")
+
+    if before:
+        normalized_date = validate_date(before)
+        parts.append(f"before:{normalized_date}")
+
+    return " ".join(parts)

@@ -36,7 +36,8 @@ date_format: "YYYY/MM"
 # Gmail query (advanced search syntax)
 # query: "from:client@example.com has:attachment"
 
-# Date filtering
+# Date filtering (YYYY-MM-DD or YYYY/MM/DD format)
+# Filters are combined with query and label if provided
 # after: "2024-01-01"
 # before: "2024-12-31"
 
