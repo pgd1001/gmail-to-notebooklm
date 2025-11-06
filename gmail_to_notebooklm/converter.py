@@ -1,6 +1,6 @@
 """HTML to Markdown conversion with email headers."""
 
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 import html2text
 from bs4 import BeautifulSoup
@@ -211,12 +211,17 @@ class MarkdownConverter:
 
         return markdown
 
-    def convert_emails_batch(self, emails: list[Dict]) -> list[tuple[str, str]]:
+    def convert_emails_batch(
+        self,
+        emails: list[Dict],
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> list[tuple[str, str]]:
         """
         Convert multiple emails to Markdown.
 
         Args:
             emails: List of parsed email data dictionaries
+            progress_callback: Optional callback for progress updates (current, total)
 
         Returns:
             List of tuples (email_id, markdown_content)
@@ -226,28 +231,41 @@ class MarkdownConverter:
         """
         converted = []
 
-        # Use Rich progress bar for conversion
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-        ) as progress:
-            task = progress.add_task(
-                "[cyan]Converting to Markdown...", total=len(emails)
-            )
-
+        # Use callback if provided, otherwise use Rich progress bar
+        if progress_callback:
             for i, email in enumerate(emails, 1):
                 try:
                     markdown = self.convert_email(email)
                     email_id = email.get("id", f"unknown_{i}")
                     converted.append((email_id, markdown))
                 except ConversionError as e:
-                    progress.console.print(
-                        f"[yellow]Warning: Failed to convert email {email.get('id')}: {e}[/yellow]"
-                    )
+                    # Note: Warnings are swallowed when using callback
                     continue
                 finally:
-                    progress.update(task, advance=1)
+                    progress_callback(i, len(emails))
+        else:
+            # Use Rich progress bar for conversion
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+            ) as progress:
+                task = progress.add_task(
+                    "[cyan]Converting to Markdown...", total=len(emails)
+                )
+
+                for i, email in enumerate(emails, 1):
+                    try:
+                        markdown = self.convert_email(email)
+                        email_id = email.get("id", f"unknown_{i}")
+                        converted.append((email_id, markdown))
+                    except ConversionError as e:
+                        progress.console.print(
+                            f"[yellow]Warning: Failed to convert email {email.get('id')}: {e}[/yellow]"
+                        )
+                        continue
+                    finally:
+                        progress.update(task, advance=1)
 
         return converted

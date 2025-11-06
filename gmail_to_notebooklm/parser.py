@@ -2,7 +2,7 @@
 
 import base64
 from email.utils import parsedate_to_datetime
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
@@ -181,12 +181,17 @@ class EmailParser:
         except Exception as e:
             return f"[Error decoding body: {e}]"
 
-    def parse_messages_batch(self, messages: List[Dict]) -> List[Dict]:
+    def parse_messages_batch(
+        self,
+        messages: List[Dict],
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> List[Dict]:
         """
         Parse multiple messages.
 
         Args:
             messages: List of raw Gmail API messages
+            progress_callback: Optional callback for progress updates (current, total)
 
         Returns:
             List of parsed message dictionaries
@@ -196,25 +201,37 @@ class EmailParser:
         """
         parsed_messages = []
 
-        # Use Rich progress bar for parsing messages
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-        ) as progress:
-            task = progress.add_task("[cyan]Parsing messages...", total=len(messages))
-
-            for message in messages:
+        # Use callback if provided, otherwise use Rich progress bar
+        if progress_callback:
+            for i, message in enumerate(messages, 1):
                 try:
                     parsed = self.parse_message(message)
                     parsed_messages.append(parsed)
                 except EmailParseError as e:
-                    progress.console.print(
-                        f"[yellow]Warning: Failed to parse message {message.get('id')}: {e}[/yellow]"
-                    )
+                    # Note: Warnings are swallowed when using callback
                     continue
                 finally:
-                    progress.update(task, advance=1)
+                    progress_callback(i, len(messages))
+        else:
+            # Use Rich progress bar for parsing messages
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+            ) as progress:
+                task = progress.add_task("[cyan]Parsing messages...", total=len(messages))
+
+                for message in messages:
+                    try:
+                        parsed = self.parse_message(message)
+                        parsed_messages.append(parsed)
+                    except EmailParseError as e:
+                        progress.console.print(
+                            f"[yellow]Warning: Failed to parse message {message.get('id')}: {e}[/yellow]"
+                        )
+                        continue
+                    finally:
+                        progress.update(task, advance=1)
 
         return parsed_messages

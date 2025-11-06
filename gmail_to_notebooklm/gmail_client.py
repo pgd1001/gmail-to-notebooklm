@@ -1,6 +1,6 @@
 """Gmail API client for fetching emails."""
 
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -198,6 +198,7 @@ class GmailClient:
         label_name: Optional[str] = None,
         max_results: Optional[int] = None,
         query: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> List[Dict]:
         """
         Get multiple messages with full content.
@@ -208,6 +209,7 @@ class GmailClient:
             label_name: Name of the Gmail label (optional if query provided)
             max_results: Maximum number of messages to return
             query: Gmail search query string (optional)
+            progress_callback: Optional callback for progress updates (current, total)
 
         Returns:
             List of message dictionaries
@@ -219,27 +221,40 @@ class GmailClient:
 
         messages = []
 
-        # Use Rich progress bar for fetching messages
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-        ) as progress:
-            task = progress.add_task(
-                "[cyan]Fetching messages...", total=len(message_ids)
-            )
-
-            for msg_id in message_ids:
+        # Use callback if provided, otherwise use Rich progress bar
+        if progress_callback:
+            for i, msg_id in enumerate(message_ids, 1):
                 try:
                     message = self.get_message(msg_id)
                     messages.append(message)
                 except GmailAPIError as e:
-                    progress.console.print(
-                        f"[yellow]Warning: Failed to fetch message {msg_id}: {e}[/yellow]"
-                    )
+                    # Note: Warnings are swallowed when using callback
+                    # The calling code should handle error reporting
                     continue
                 finally:
-                    progress.update(task, advance=1)
+                    progress_callback(i, len(message_ids))
+        else:
+            # Use Rich progress bar for fetching messages
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+            ) as progress:
+                task = progress.add_task(
+                    "[cyan]Fetching messages...", total=len(message_ids)
+                )
+
+                for msg_id in message_ids:
+                    try:
+                        message = self.get_message(msg_id)
+                        messages.append(message)
+                    except GmailAPIError as e:
+                        progress.console.print(
+                            f"[yellow]Warning: Failed to fetch message {msg_id}: {e}[/yellow]"
+                        )
+                        continue
+                    finally:
+                        progress.update(task, advance=1)
 
         return messages
