@@ -12,6 +12,8 @@ from gmail_to_notebooklm.core import ExportEngine, ExportResult, ProgressUpdate
 from gmail_to_notebooklm.gui.windows.export_dialog import ExportDialog
 from gmail_to_notebooklm.gui.windows.oauth_wizard import OAuthWizard
 from gmail_to_notebooklm.gui.windows.settings_dialog import SettingsDialog
+from gmail_to_notebooklm.gui.windows.history_dialog import HistoryDialog
+from gmail_to_notebooklm.gui.windows.profiles_dialog import ProfilesDialog
 
 
 class MainWindow(ttk.Frame):
@@ -65,7 +67,21 @@ class MainWindow(ttk.Frame):
             text="Settings",
             command=self._show_settings
         )
-        settings_button.pack(side=tk.LEFT)
+        settings_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        profiles_button = ttk.Button(
+            menu_frame,
+            text="Profiles",
+            command=self._show_profiles
+        )
+        profiles_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        history_button = ttk.Button(
+            menu_frame,
+            text="History",
+            command=self._show_history
+        )
+        history_button.pack(side=tk.LEFT)
 
         # Title
         title = ttk.Label(
@@ -427,3 +443,54 @@ class MainWindow(ttk.Frame):
             self.settings = result
 
             messagebox.showinfo("Settings Saved", "Settings have been updated successfully!")
+
+    def _show_history(self):
+        """Show export history dialog."""
+        HistoryDialog(self.parent)
+
+    def _show_profiles(self):
+        """Show export profiles dialog."""
+        ProfilesDialog(self.parent, on_load_callback=self._load_profile_settings)
+
+    def _load_profile_settings(self, settings: dict):
+        """Load settings from profile.
+
+        Args:
+            settings: Profile settings dictionary
+        """
+        # Apply profile settings to form fields
+        if settings.get("label"):
+            # Find and select the label in combo box
+            labels = self.label_combo["values"]
+            if settings["label"] in labels:
+                self.label_combo.set(settings["label"])
+
+        if settings.get("query"):
+            self.query_var.set(settings["query"])
+
+        if settings.get("output_dir"):
+            self.output_dir_var.set(settings["output_dir"])
+
+        if "organize_by_date" in settings:
+            self.organize_by_date_var.set(settings["organize_by_date"])
+
+        if "create_index" in settings:
+            self.create_index_var.set(settings["create_index"])
+
+        if "overwrite" in settings:
+            self.overwrite_var.set(settings["overwrite"])
+
+        if settings.get("max_results"):
+            self.max_results_var.set(str(settings["max_results"]))
+
+        if settings.get("after"):
+            self.after_var.set(settings["after"])
+
+        if settings.get("before"):
+            self.before_var.set(settings["before"])
+
+        if settings.get("from"):
+            self.from_var.set(settings["from"])
+
+        if settings.get("to"):
+            self.to_var.set(settings["to"])

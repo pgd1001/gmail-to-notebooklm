@@ -26,6 +26,13 @@ from gmail_to_notebooklm.utils import (
     write_markdown_file,
 )
 
+# Optional history tracking
+try:
+    from gmail_to_notebooklm.history import ExportHistory
+    HISTORY_AVAILABLE = True
+except ImportError:
+    HISTORY_AVAILABLE = False
+
 
 @dataclass
 class ProgressUpdate:
@@ -97,6 +104,7 @@ class ExportEngine:
         progress_callback: Optional[Callable[[ProgressUpdate], None]] = None,
         status_callback: Optional[Callable[[str], None]] = None,
         error_callback: Optional[Callable[[Exception], bool]] = None,
+        enable_history: bool = True,
     ):
         """Initialize export engine with optional callbacks.
 
@@ -104,13 +112,18 @@ class ExportEngine:
             progress_callback: Called with ProgressUpdate for each progress change
             status_callback: Called with status message strings
             error_callback: Called when errors occur, returns True to retry
+            enable_history: Track exports in history database
         """
         self.progress_callback = progress_callback
         self.status_callback = status_callback
         self.error_callback = error_callback
+        self.enable_history = enable_history and HISTORY_AVAILABLE
 
         self._cancelled = False
         self._start_time = 0.0
+
+        # Initialize history if enabled
+        self.history = ExportHistory() if self.enable_history else None
 
     def cancel(self):
         """Request cancellation of current export."""
@@ -415,7 +428,7 @@ class ExportEngine:
                 "errors": len(errors),
             }
 
-            return ExportResult(
+            result = ExportResult(
                 success=saved_count > 0 and not self._cancelled,
                 files_created=saved_count,
                 output_dir=output_dir,
@@ -423,6 +436,40 @@ class ExportEngine:
                 duration_seconds=duration,
                 stats=stats,
             )
+
+            # Record in history if enabled and not dry run
+            if self.history and not dry_run:
+                try:
+                    # Prepare file metadata
+                    file_metadata = []
+                    for email in parsed_emails:
+                        if email["id"] in filenames:
+                            file_metadata.append({
+                                "email_id": email["id"],
+                                "filename": filenames[email["id"]],
+                                "subject": email.get("subject", ""),
+                                "from": email.get("from", ""),
+                                "to": email.get("to", ""),
+                                "date": email.get("date", ""),
+                            })
+
+                    # Add to history
+                    self.history.add_export(
+                        label=settings.get("label"),
+                        query=final_query,
+                        files_created=saved_count,
+                        duration_seconds=duration,
+                        output_dir=str(output_dir.absolute()),
+                        settings=settings,
+                        success=result.success,
+                        error_count=len(errors),
+                        files=file_metadata if file_metadata else None,
+                    )
+                except Exception as e:
+                    # Don't fail export if history tracking fails
+                    self._report_status(f"Warning: Failed to save to history: {e}")
+
+            return result
 
         except Exception as e:
             # Try error callback for retry
