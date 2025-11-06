@@ -3,7 +3,7 @@
 import os
 import pickle
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -22,6 +22,7 @@ def authenticate(
     credentials_path: str = "credentials.json",
     token_path: str = "token.json",
     scopes: Optional[list] = None,
+    status_callback: Optional[Callable[[str], None]] = None,
 ) -> Credentials:
     """
     Authenticate with Gmail API using OAuth 2.0.
@@ -33,6 +34,7 @@ def authenticate(
         credentials_path: Path to credentials.json from Google Cloud Console
         token_path: Path to save/load authentication token
         scopes: List of OAuth scopes (default: gmail.readonly)
+        status_callback: Optional callback for status messages
 
     Returns:
         Authenticated Google API credentials
@@ -46,6 +48,13 @@ def authenticate(
         >>> # First run opens browser for authorization
         >>> # Subsequent runs use saved token
     """
+    def _log(message: str):
+        """Log message to callback or print."""
+        if status_callback:
+            status_callback(message)
+        else:
+            print(message)
+
     if scopes is None:
         scopes = SCOPES
 
@@ -67,25 +76,25 @@ def authenticate(
             with open(token_file, "rb") as token:
                 creds = pickle.load(token)
         except Exception as e:
-            print(f"Warning: Could not load token file: {e}")
-            print("Will re-authenticate...")
+            _log(f"Warning: Could not load token file: {e}")
+            _log("Will re-authenticate...")
             creds = None
 
     # Refresh or create new credentials
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
-                print("Refreshing authentication token...")
+                _log("Refreshing authentication token...")
                 creds.refresh(Request())
             except Exception as e:
-                print(f"Token refresh failed: {e}")
-                print("Re-authenticating...")
+                _log(f"Token refresh failed: {e}")
+                _log("Re-authenticating...")
                 creds = None
 
         if not creds:
             try:
-                print("Starting OAuth 2.0 authentication...")
-                print("A browser window will open for authorization.")
+                _log("Starting OAuth 2.0 authentication...")
+                _log("A browser window will open for authorization.")
                 flow = InstalledAppFlow.from_client_secrets_file(
                     credentials_path, scopes
                 )
@@ -95,7 +104,7 @@ def authenticate(
                 if not creds:
                     raise AuthenticationError("No credentials returned from OAuth flow")
 
-                print("Authentication successful!")
+                _log("Authentication successful!")
             except AuthenticationError:
                 raise
             except Exception as e:
@@ -114,11 +123,11 @@ def authenticate(
         try:
             with open(token_path, "wb") as token:
                 pickle.dump(creds, token)
-            print(f"Authentication token saved to {token_path}")
+            _log(f"Authentication token saved to {token_path}")
         except Exception as e:
             import traceback
-            print(f"Warning: Could not save token: {e}")
-            print(f"Details: {traceback.format_exc()}")
+            _log(f"Warning: Could not save token: {e}")
+            _log(f"Details: {traceback.format_exc()}")
 
     return creds
 
