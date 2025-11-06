@@ -52,6 +52,8 @@ dev = [
 [project.scripts]
 gmail-to-notebooklm = "gmail_to_notebooklm.main:cli"
 gmail-to-notebooklm-gui = "gmail_to_notebooklm.gui.app:main"
+g2n = "gmail_to_notebooklm.main:cli"
+g2n-gui = "gmail_to_notebooklm.gui.app:main"
 
 [project.urls]
 Homepage = "https://github.com/yourusername/gmail-to-notebooklm"
