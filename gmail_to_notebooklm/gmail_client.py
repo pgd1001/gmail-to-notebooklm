@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 
 class GmailAPIError(Exception):
@@ -217,14 +218,28 @@ class GmailClient:
         message_ids = self.list_messages(label_name, max_results, query)
 
         messages = []
-        for i, msg_id in enumerate(message_ids, 1):
-            print(f"Fetching message {i}/{len(message_ids)}...", end="\r")
-            try:
-                message = self.get_message(msg_id)
-                messages.append(message)
-            except GmailAPIError as e:
-                print(f"\nWarning: Failed to fetch message {msg_id}: {e}")
-                continue
 
-        print()  # New line after progress
+        # Use Rich progress bar for fetching messages
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+        ) as progress:
+            task = progress.add_task(
+                "[cyan]Fetching messages...", total=len(message_ids)
+            )
+
+            for msg_id in message_ids:
+                try:
+                    message = self.get_message(msg_id)
+                    messages.append(message)
+                except GmailAPIError as e:
+                    progress.console.print(
+                        f"[yellow]Warning: Failed to fetch message {msg_id}: {e}[/yellow]"
+                    )
+                    continue
+                finally:
+                    progress.update(task, advance=1)
+
         return messages

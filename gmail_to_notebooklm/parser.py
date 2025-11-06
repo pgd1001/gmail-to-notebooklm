@@ -4,6 +4,8 @@ import base64
 from email.utils import parsedate_to_datetime
 from typing import Dict, List, Optional
 
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+
 
 class EmailParseError(Exception):
     """Raised when email parsing fails."""
@@ -194,14 +196,25 @@ class EmailParser:
         """
         parsed_messages = []
 
-        for i, message in enumerate(messages, 1):
-            print(f"Parsing message {i}/{len(messages)}...", end="\r")
-            try:
-                parsed = self.parse_message(message)
-                parsed_messages.append(parsed)
-            except EmailParseError as e:
-                print(f"\nWarning: Failed to parse message {message.get('id')}: {e}")
-                continue
+        # Use Rich progress bar for parsing messages
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+        ) as progress:
+            task = progress.add_task("[cyan]Parsing messages...", total=len(messages))
 
-        print()  # New line after progress
+            for message in messages:
+                try:
+                    parsed = self.parse_message(message)
+                    parsed_messages.append(parsed)
+                except EmailParseError as e:
+                    progress.console.print(
+                        f"[yellow]Warning: Failed to parse message {message.get('id')}: {e}[/yellow]"
+                    )
+                    continue
+                finally:
+                    progress.update(task, advance=1)
+
         return parsed_messages
