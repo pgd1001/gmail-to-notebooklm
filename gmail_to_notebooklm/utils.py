@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
@@ -452,3 +453,45 @@ def generate_index_file(
         return index_path
     except Exception as e:
         raise OSError(f"Failed to write index file {index_path}: {e}")
+
+
+def get_date_subdirectory(email_data: dict, date_format: str = "YYYY/MM") -> str:
+    """
+    Get date-based subdirectory path from email data.
+
+    Args:
+        email_data: Parsed email data dictionary
+        date_format: Date format for subdirectory (YYYY/MM, YYYY-MM, YYYY/MM/DD, YYYY-MM-DD)
+
+    Returns:
+        Subdirectory path string (e.g., "2024/01" or "2024-01")
+
+    Example:
+        >>> email_data = {"date": "Mon, 15 Jan 2024 10:30:00 +0000"}
+        >>> get_date_subdirectory(email_data, "YYYY/MM")
+        '2024/01'
+        >>> get_date_subdirectory(email_data, "YYYY-MM")
+        '2024-01'
+    """
+    date_str = email_data.get("date", "")
+
+    try:
+        # Parse email date
+        date_obj = parsedate_to_datetime(date_str)
+
+        # Format based on specified format
+        if date_format == "YYYY/MM":
+            return f"{date_obj.year}/{date_obj.month:02d}"
+        elif date_format == "YYYY-MM":
+            return f"{date_obj.year}-{date_obj.month:02d}"
+        elif date_format == "YYYY/MM/DD":
+            return f"{date_obj.year}/{date_obj.month:02d}/{date_obj.day:02d}"
+        elif date_format == "YYYY-MM-DD":
+            return f"{date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d}"
+        else:
+            # Default to YYYY/MM
+            return f"{date_obj.year}/{date_obj.month:02d}"
+
+    except (ValueError, TypeError, AttributeError):
+        # If date parsing fails, use "Unknown" subdirectory
+        return "Unknown"

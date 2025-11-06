@@ -29,6 +29,7 @@ from gmail_to_notebooklm.utils import (
     build_date_query,
     build_sender_query,
     generate_index_file,
+    get_date_subdirectory,
 )
 
 
@@ -120,6 +121,17 @@ from gmail_to_notebooklm.utils import (
     is_flag=True,
     help="Create INDEX.md file with table of contents",
 )
+@click.option(
+    "--organize-by-date",
+    is_flag=True,
+    help="Organize files into date-based subdirectories",
+)
+@click.option(
+    "--date-format",
+    default="YYYY/MM",
+    type=click.Choice(["YYYY/MM", "YYYY-MM", "YYYY/MM/DD", "YYYY-MM-DD"], case_sensitive=False),
+    help="Date format for organization (default: YYYY/MM)",
+)
 @click.version_option(version=__version__)
 def cli(
     config: Optional[str],
@@ -137,6 +149,8 @@ def cli(
     verbose: bool,
     overwrite: bool,
     create_index: bool,
+    organize_by_date: bool,
+    date_format: str,
 ):
     """
     Convert Gmail emails from a label to Markdown files for NotebookLM.
@@ -177,6 +191,8 @@ def cli(
             "verbose": verbose,
             "overwrite": overwrite,
             "create_index": create_index,
+            "organize_by_date": organize_by_date,
+            "date_format": date_format,
         }
         settings = cfg.merge_with_cli_args(cli_args)
 
@@ -195,6 +211,8 @@ def cli(
         verbose = settings.get("verbose", False)
         overwrite = settings.get("overwrite", False)
         create_index = settings.get("create_index", False)
+        organize_by_date = settings.get("organize_by_date", False)
+        date_format = settings.get("date_format", "YYYY/MM")
 
         # Validate required fields
         if not label and not query and not after and not before and not from_ and not to:
@@ -313,7 +331,7 @@ def cli(
 
             # Write files and track filenames for index
             saved_count = 0
-            filenames = {}  # email_id -> filename mapping
+            filenames = {}  # email_id -> filename mapping (with subdirectory if applicable)
             for email_id, markdown_content in converted:
                 # Find original email to get subject
                 original = next(
@@ -327,14 +345,23 @@ def cli(
                 # Create filename
                 filename = create_filename(subject, email_id)
 
+                # Determine output directory (with date subdirectory if enabled)
+                if organize_by_date and original:
+                    date_subdir = get_date_subdirectory(original, date_format)
+                    target_dir = output_path / date_subdir
+                    relative_path = f"{date_subdir}/{filename}"
+                else:
+                    target_dir = output_path
+                    relative_path = filename
+
                 # Write file
                 try:
                     file_path = write_markdown_file(
-                        output_path, filename, markdown_content, overwrite=overwrite
+                        target_dir, filename, markdown_content, overwrite=overwrite
                     )
-                    filenames[email_id] = file_path.name
+                    filenames[email_id] = relative_path
                     if verbose:
-                        click.echo(f"  Saved: {file_path.name}")
+                        click.echo(f"  Saved: {relative_path}")
                     saved_count += 1
                 except Exception as e:
                     click.echo(
