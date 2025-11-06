@@ -8,12 +8,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned Features
+- Email preview before export
 - Multiple label support in one command
+- Scheduled exports (Task Scheduler integration)
 - Integration tests
 - Docker containerization
 - Parallel processing
 - Email thread reconstruction
 - Custom Markdown templates
+
+## [0.3.0] - 2025-11-06
+
+### Added - Phase 2 & 3: Desktop GUI + Advanced Features
+
+#### Windows Desktop GUI (Phase 2A)
+- **Complete Tkinter GUI Application**: Zero-dependency desktop interface
+- **Main Window**: Label selection, all Phase 1 filters, real-time auth status
+- **OAuth Setup Wizard**: 5-step guided setup for first-time users
+- **Settings Dialog**: Tabbed interface for credentials, defaults, and advanced options
+- **Export Progress Dialog**: Real-time progress with cancel support
+- **Menu Bar**: Easy access to Setup, Settings, Profiles, and History
+
+#### Enhanced DevOps CLI (Phase 2B)
+- **--dry-run**: Validate settings without creating files
+- **--quiet**: Suppress output except errors (CI/CD friendly)
+- **--json-output**: Machine-readable JSON for scripting
+- **--list-labels**: Quick label discovery
+- **Proper Exit Codes**: 0-5, 130 for automation
+- **ExportEngine Integration**: Unified behavior with GUI
+
+#### Advanced Features (Phase 3)
+- **Export History System**: SQLite database tracking all exports
+- **Export Profiles**: Save/load common configurations
+- **History Dialog**: View past exports with statistics
+- **Profiles Dialog**: Manage saved configurations
+- **Statistics Dashboard**: Success rates, average duration, usage patterns
+- **Profile Loading**: One-click application of saved settings
+
+### Technical
+
+#### Core Architecture
+- **UI-Agnostic Core** (core.py): ExportEngine with callback support
+- **History Tracking** (history.py): SQLite with search and statistics
+- **Profile Management** (profiles.py): JSON-based configuration storage
+- **Callback Pattern**: Progress and status updates for any UI
+- **Optional Dependencies**: Graceful degradation if features unavailable
+
+#### New Entry Points
+- `gmail-to-notebooklm-gui`: Launch desktop application
+- `python -m gmail_to_notebooklm.gui.main`: Alternative GUI launch
+
+#### Exit Codes
+- 0: Success
+- 1: Configuration error
+- 2: Authentication error
+- 3: API error
+- 4: No results found
+- 5: Export error
+- 130: User cancelled
+
+### Code Statistics
+- **Total Lines Added**: ~4,000
+- **New Files**: 13
+- **Modified Files**: 10
+- **GUI Code**: ~2,400 lines
+- **CLI Code**: ~450 lines
+- **History/Profiles**: ~570 lines
+- **Core Engine**: ~465 lines
 
 ## [0.2.0] - 2025-11-06
 
