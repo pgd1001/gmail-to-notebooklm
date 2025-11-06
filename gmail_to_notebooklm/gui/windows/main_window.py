@@ -10,6 +10,8 @@ from gmail_to_notebooklm.auth import authenticate, AuthenticationError
 from gmail_to_notebooklm.gmail_client import GmailClient, GmailAPIError
 from gmail_to_notebooklm.core import ExportEngine, ExportResult, ProgressUpdate
 from gmail_to_notebooklm.gui.windows.export_dialog import ExportDialog
+from gmail_to_notebooklm.gui.windows.oauth_wizard import OAuthWizard
+from gmail_to_notebooklm.gui.windows.settings_dialog import SettingsDialog
 
 
 class MainWindow(ttk.Frame):
@@ -37,6 +39,7 @@ class MainWindow(ttk.Frame):
         self.available_labels: list = []
         self.credentials_path = "credentials.json"
         self.token_path = "token.json"
+        self.settings = {}
 
         # Build UI
         self._create_widgets()
@@ -46,6 +49,24 @@ class MainWindow(ttk.Frame):
 
     def _create_widgets(self):
         """Create all UI widgets."""
+        # Menu bar
+        menu_frame = ttk.Frame(self)
+        menu_frame.pack(fill=tk.X, pady=(0, 10))
+
+        setup_button = ttk.Button(
+            menu_frame,
+            text="Setup Wizard",
+            command=self._show_oauth_wizard
+        )
+        setup_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        settings_button = ttk.Button(
+            menu_frame,
+            text="Settings",
+            command=self._show_settings
+        )
+        settings_button.pack(side=tk.LEFT)
+
         # Title
         title = ttk.Label(
             self,
@@ -373,3 +394,36 @@ class MainWindow(ttk.Frame):
         # Show export dialog
         dialog = ExportDialog(self.parent, settings)
         dialog.start_export()
+
+    def _show_oauth_wizard(self):
+        """Show OAuth setup wizard."""
+        wizard = OAuthWizard(self.parent, on_complete=lambda: self._authenticate(silent=False))
+
+    def _show_settings(self):
+        """Show settings dialog."""
+        # Prepare current settings
+        current_settings = {
+            "credentials_path": self.credentials_path,
+            "token_path": self.token_path,
+            "output_dir": self.output_dir_var.get(),
+            "organize_by_date": self.organize_by_date_var.get(),
+            "create_index": self.create_index_var.get(),
+            "overwrite": self.overwrite_var.get(),
+        }
+
+        # Show dialog
+        dialog = SettingsDialog(self.parent, current_settings)
+        self.parent.wait_window(dialog)
+
+        # Apply new settings if saved
+        result = dialog.get_result()
+        if result:
+            self.credentials_path = result.get("credentials_path", "credentials.json")
+            self.token_path = result.get("token_path", "token.json")
+            self.output_dir_var.set(result.get("output_dir", "./output"))
+            self.organize_by_date_var.set(result.get("organize_by_date", False))
+            self.create_index_var.set(result.get("create_index", False))
+            self.overwrite_var.set(result.get("overwrite", False))
+            self.settings = result
+
+            messagebox.showinfo("Settings Saved", "Settings have been updated successfully!")
