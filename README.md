@@ -39,9 +39,43 @@ gmail-to-notebooklm --label "Client A" --output-dir "./output"
 
 See [QUICKSTART.md](QUICKSTART.md) for a complete 5-minute setup guide.
 
+## Download
+
+### Windows Users (No Python Required)
+
+**Recommended**: Download the standalone installer:
+- [gmail-to-notebooklm-setup-0.3.0.exe](https://github.com/yourusername/gmail-to-notebooklm/releases) (35 MB)
+  - Includes both CLI and GUI
+  - One-click installation
+  - Optional PATH integration
+  - No Python required
+
+**Portable**: Download the portable executables:
+- [gmail-to-notebooklm-portable-0.3.0.zip](https://github.com/yourusername/gmail-to-notebooklm/releases) (70 MB)
+  - No installation needed
+  - Extract and run
+  - Includes `g2n.exe` (CLI) and `g2n-gui.exe` (GUI)
+
+### Python Users
+
+```bash
+pip install gmail-to-notebooklm
+```
+
 ## Installation
 
-### Prerequisites
+### Windows Standalone
+
+1. Download `gmail-to-notebooklm-setup-0.3.0.exe`
+2. Run the installer
+3. Launch from Start Menu or desktop shortcut
+4. Run the Setup Wizard to configure OAuth
+
+See [SETUP_WINDOWS.md](SETUP_WINDOWS.md) for detailed Windows installation instructions.
+
+### Python Installation
+
+#### Prerequisites
 
 - Python 3.9 or higher
 - Google account with Gmail
@@ -125,12 +159,17 @@ Files are named using the format: `[Sanitized_Subject]_[Email_ID].md`
 
 ## Documentation
 
+### User Guides
 - [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
-- [INSTALLATION.md](INSTALLATION.md) - Detailed installation instructions
+- [SETUP_WINDOWS.md](SETUP_WINDOWS.md) - Windows installation guide
 - [OAUTH_SETUP.md](OAUTH_SETUP.md) - Google OAuth 2.0 configuration
 - [USAGE.md](USAGE.md) - Comprehensive usage guide
 - [CONFIGURATION.md](CONFIGURATION.md) - Configuration options
+
+### Developer Guides
 - [DEVELOPMENT.md](DEVELOPMENT.md) - Developer guide
+- [BUILD_INSTALLER.md](BUILD_INSTALLER.md) - Building Windows executables and installer
+- [DISTRIBUTION.md](DISTRIBUTION.md) - Distribution and release guide
 
 ## Project Structure
 

@@ -78,6 +78,20 @@ exports/
 !CHANGELOG.md
 !CONTRIBUTING.md
 !LICENSE.md
+!SETUP_WINDOWS.md
+!BUILD_INSTALLER.md
+!DISTRIBUTION.md
+
+# PyInstaller build files
+build/
+dist/*.exe
+*.spec.bak
+warn-*.txt
+xref-*.html
+
+# Inno Setup
+installer_output/
+Output/
 
 # Type checking
 .mypy_cache/
