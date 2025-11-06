@@ -28,6 +28,7 @@ from gmail_to_notebooklm.utils import (
     get_env_or_default,
     build_date_query,
     build_sender_query,
+    generate_index_file,
 )
 
 
@@ -114,6 +115,11 @@ from gmail_to_notebooklm.utils import (
     is_flag=True,
     help="Overwrite existing files",
 )
+@click.option(
+    "--create-index",
+    is_flag=True,
+    help="Create INDEX.md file with table of contents",
+)
 @click.version_option(version=__version__)
 def cli(
     config: Optional[str],
@@ -130,6 +136,7 @@ def cli(
     token: Optional[str],
     verbose: bool,
     overwrite: bool,
+    create_index: bool,
 ):
     """
     Convert Gmail emails from a label to Markdown files for NotebookLM.
@@ -169,6 +176,7 @@ def cli(
             "token": token,
             "verbose": verbose,
             "overwrite": overwrite,
+            "create_index": create_index,
         }
         settings = cfg.merge_with_cli_args(cli_args)
 
@@ -186,6 +194,7 @@ def cli(
         token = settings.get("token", "token.json")
         verbose = settings.get("verbose", False)
         overwrite = settings.get("overwrite", False)
+        create_index = settings.get("create_index", False)
 
         # Validate required fields
         if not label and not query and not after and not before and not from_ and not to:
@@ -302,8 +311,9 @@ def cli(
             converter = MarkdownConverter(include_headers=True, body_width=0)
             converted = converter.convert_emails_batch(parsed_emails)
 
-            # Write files
+            # Write files and track filenames for index
             saved_count = 0
+            filenames = {}  # email_id -> filename mapping
             for email_id, markdown_content in converted:
                 # Find original email to get subject
                 original = next(
@@ -322,6 +332,7 @@ def cli(
                     file_path = write_markdown_file(
                         output_path, filename, markdown_content, overwrite=overwrite
                     )
+                    filenames[email_id] = file_path.name
                     if verbose:
                         click.echo(f"  Saved: {file_path.name}")
                     saved_count += 1
@@ -331,6 +342,17 @@ def cli(
                     )
 
             click.echo(f"✓ Saved {saved_count} Markdown file(s) to {output_path}")
+
+            # Generate index file if requested
+            if create_index and saved_count > 0:
+                try:
+                    click.echo("\nGenerating index file...")
+                    # Create list of (email_id, email_data) tuples
+                    email_list = [(e["id"], e) for e in parsed_emails if e["id"] in filenames]
+                    index_path = generate_index_file(output_path, email_list, filenames)
+                    click.echo(f"✓ Created index file: {index_path.name}")
+                except Exception as e:
+                    click.echo(f"  Warning: Failed to create index: {e}", err=True)
 
         except ConversionError as e:
             click.echo(f"✗ Failed to convert emails: {e}", err=True)
