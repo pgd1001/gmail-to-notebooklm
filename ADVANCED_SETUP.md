@@ -1,4 +1,14 @@
-# OAuth 2.0 Setup Guide
+# Advanced Setup: Create Your Own OAuth Credentials
+
+> **Note**: This guide is for **advanced users** who want to create their own Google Cloud Project and OAuth credentials.
+>
+> **Most users don't need this!** If you're using the pre-built Windows executable, OAuth credentials are already embedded. See [SIMPLIFIED_SETUP.md](SIMPLIFIED_SETUP.md) instead.
+>
+> **Use this guide if you:**
+> - Want full control over OAuth credentials
+> - Are developing/modifying the application
+> - Need more than the 100-user beta limit
+> - Prefer not to use embedded credentials
 
 This guide walks you through obtaining the `credentials.json` file required to authenticate with the Gmail API.
 

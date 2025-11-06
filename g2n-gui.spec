@@ -60,8 +60,10 @@ hiddenimports = [
     'gmail_to_notebooklm.profiles',
 ]
 
-# Collect data files (if any)
-datas = []
+# Collect data files
+datas = [
+    ('gmail_to_notebooklm/data', 'gmail_to_notebooklm/data'),  # Include data directory with embedded credentials
+]
 
 a = Analysis(
     ['gmail_to_notebooklm\\gui\\app.py'],

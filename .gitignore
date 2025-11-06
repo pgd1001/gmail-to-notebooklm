@@ -4,6 +4,9 @@ token.json
 token.pickle
 client_secret*.json
 
+# Embedded default credentials (for distribution only)
+gmail_to_notebooklm/data/default_credentials.json
+
 # Environment variables
 .env
 .env.local

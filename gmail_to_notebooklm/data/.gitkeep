@@ -1,0 +1,2 @@
+# This file ensures the data directory is tracked in git
+# The actual default_credentials.json file is excluded via .gitignore

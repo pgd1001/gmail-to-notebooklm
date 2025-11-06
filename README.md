@@ -99,9 +99,11 @@ For complete installation instructions, see [INSTALLATION.md](INSTALLATION.md).
 
 ### OAuth Setup
 
-You'll need to create OAuth 2.0 credentials to access Gmail:
+**For most users**: If you downloaded the Windows .exe, OAuth credentials are already embedded. See [SIMPLIFIED_SETUP.md](SIMPLIFIED_SETUP.md).
 
-1. Follow the step-by-step guide in [OAUTH_SETUP.md](OAUTH_SETUP.md)
+**For advanced users** who want to create their own credentials:
+
+1. Follow the step-by-step guide in [ADVANCED_SETUP.md](ADVANCED_SETUP.md)
 2. Download `credentials.json` from Google Cloud Console
 3. Place it in the project root directory
 
@@ -161,8 +163,10 @@ Files are named using the format: `[Sanitized_Subject]_[Email_ID].md`
 
 ### User Guides
 - [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
+- [SIMPLIFIED_SETUP.md](SIMPLIFIED_SETUP.md) - For Windows .exe users (no Python needed)
 - [SETUP_WINDOWS.md](SETUP_WINDOWS.md) - Windows installation guide
-- [OAUTH_SETUP.md](OAUTH_SETUP.md) - Google OAuth 2.0 configuration
+- [BETA_ACCESS.md](BETA_ACCESS.md) - Join the beta testing program
+- [ADVANCED_SETUP.md](ADVANCED_SETUP.md) - Create your own OAuth credentials
 - [USAGE.md](USAGE.md) - Comprehensive usage guide
 - [CONFIGURATION.md](CONFIGURATION.md) - Configuration options
 

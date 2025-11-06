@@ -2,6 +2,7 @@
 
 import os
 import pickle
+import sys
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -11,6 +12,50 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 # Gmail API scopes
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+
+def find_credentials_file(credentials_path: str = "credentials.json") -> Optional[Path]:
+    """
+    Search for credentials file in multiple locations.
+
+    Search order:
+    1. User-provided path (current directory or absolute path)
+    2. User config directory (~/.gmail-to-notebooklm/credentials.json)
+    3. Embedded default credentials (gmail_to_notebooklm/data/default_credentials.json)
+
+    Args:
+        credentials_path: Preferred credentials path (default: credentials.json)
+
+    Returns:
+        Path to credentials file if found, None otherwise
+    """
+    # 1. Check user-provided path (current directory or absolute)
+    user_creds = Path(credentials_path)
+    if user_creds.exists():
+        return user_creds
+
+    # 2. Check user config directory
+    home_config = Path.home() / ".gmail-to-notebooklm" / "credentials.json"
+    if home_config.exists():
+        return home_config
+
+    # 3. Check embedded default credentials
+    # Handle both normal Python execution and PyInstaller frozen executable
+    if getattr(sys, 'frozen', False):
+        # Running in PyInstaller bundle
+        bundle_dir = Path(sys._MEIPASS)  # type: ignore
+        embedded_creds = bundle_dir / "gmail_to_notebooklm" / "data" / "default_credentials.json"
+    else:
+        # Running in normal Python
+        # Get the directory where this auth.py file is located
+        current_file = Path(__file__).resolve()
+        package_dir = current_file.parent
+        embedded_creds = package_dir / "data" / "default_credentials.json"
+
+    if embedded_creds.exists():
+        return embedded_creds
+
+    return None
 
 
 class AuthenticationError(Exception):
@@ -58,14 +103,21 @@ def authenticate(
     if scopes is None:
         scopes = SCOPES
 
-    # Verify credentials.json exists
-    credentials_file = Path(credentials_path)
-    if not credentials_file.exists():
+    # Find credentials file (searches multiple locations)
+    credentials_file = find_credentials_file(credentials_path)
+    if not credentials_file:
         raise FileNotFoundError(
-            f"Credentials file not found: {credentials_path}\n"
-            f"Please download credentials.json from Google Cloud Console.\n"
-            f"See OAUTH_SETUP.md for instructions."
+            f"Credentials file not found. Searched locations:\n"
+            f"1. {credentials_path} (user-provided)\n"
+            f"2. ~/.gmail-to-notebooklm/credentials.json (user config)\n"
+            f"3. Embedded default credentials (if available)\n\n"
+            f"For simplified setup, download the pre-built executable which includes credentials.\n"
+            f"For advanced setup, see ADVANCED_SETUP.md for creating your own credentials."
         )
+
+    # Convert to string for use with google-auth-oauthlib
+    credentials_path_str = str(credentials_file)
+    _log(f"Using credentials from: {credentials_file}")
 
     creds = None
     token_file = Path(token_path)
@@ -96,7 +148,7 @@ def authenticate(
                 _log("Starting OAuth 2.0 authentication...")
                 _log("A browser window will open for authorization.")
                 flow = InstalledAppFlow.from_client_secrets_file(
-                    credentials_path, scopes
+                    credentials_path_str, scopes
                 )
                 creds = flow.run_local_server(port=0)
 
