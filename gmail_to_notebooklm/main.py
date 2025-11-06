@@ -27,6 +27,7 @@ from gmail_to_notebooklm.utils import (
     write_markdown_file,
     get_env_or_default,
     build_date_query,
+    build_sender_query,
 )
 
 
@@ -59,6 +60,22 @@ from gmail_to_notebooklm.utils import (
     "--before",
     default=None,
     help="Filter emails before this date (YYYY-MM-DD or YYYY/MM/DD)",
+)
+@click.option(
+    "--from",
+    "from_",
+    default=None,
+    help="Filter emails from sender(s) (comma-separated)",
+)
+@click.option(
+    "--to",
+    default=None,
+    help="Filter emails to recipient(s) (comma-separated)",
+)
+@click.option(
+    "--exclude-from",
+    default=None,
+    help="Exclude emails from sender(s) (comma-separated)",
 )
 @click.option(
     "--output-dir",
@@ -104,6 +121,9 @@ def cli(
     query: Optional[str],
     after: Optional[str],
     before: Optional[str],
+    from_: Optional[str],
+    to: Optional[str],
+    exclude_from: Optional[str],
     output_dir: Optional[str],
     max_results: Optional[int],
     credentials: Optional[str],
@@ -140,6 +160,9 @@ def cli(
             "query": query,
             "after": after,
             "before": before,
+            "from": from_,
+            "to": to,
+            "exclude_from": exclude_from,
             "output_dir": output_dir,
             "max_results": max_results,
             "credentials": credentials,
@@ -154,6 +177,9 @@ def cli(
         query = settings.get("query")
         after = settings.get("after")
         before = settings.get("before")
+        from_ = settings.get("from")
+        to = settings.get("to")
+        exclude_from = settings.get("exclude_from")
         output_dir = settings.get("output_dir")
         max_results = settings.get("max_results")
         credentials = settings.get("credentials", "credentials.json")
@@ -162,9 +188,9 @@ def cli(
         overwrite = settings.get("overwrite", False)
 
         # Validate required fields
-        if not label and not query and not after and not before:
+        if not label and not query and not after and not before and not from_ and not to:
             click.echo(
-                "✗ Error: At least one filter is required: --label, --query, --after, or --before",
+                "✗ Error: At least one filter is required: --label, --query, --after, --before, --from, or --to",
                 err=True,
             )
             sys.exit(1)
@@ -176,12 +202,25 @@ def cli(
             click.echo(f"✗ Date validation error: {e}", err=True)
             sys.exit(1)
 
-        # Combine queries if multiple provided
+        # Build sender/recipient query if filters provided
+        sender_query = (
+            build_sender_query(from_, to, exclude_from)
+            if (from_ or to or exclude_from)
+            else None
+        )
+
+        # Combine all queries
         if date_query:
             if query:
                 query = f"{query} {date_query}"
             else:
                 query = date_query
+
+        if sender_query:
+            if query:
+                query = f"{query} {sender_query}"
+            else:
+                query = sender_query
 
         # Determine output directory with fallback
         if output_dir is None:

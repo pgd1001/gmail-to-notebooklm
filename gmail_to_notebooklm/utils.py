@@ -306,3 +306,56 @@ def build_date_query(after: Optional[str] = None, before: Optional[str] = None) 
         parts.append(f"before:{normalized_date}")
 
     return " ".join(parts)
+
+
+def build_sender_query(
+    from_: Optional[str] = None,
+    to: Optional[str] = None,
+    exclude_from: Optional[str] = None,
+) -> str:
+    """
+    Build Gmail query string from sender/recipient filters.
+
+    Args:
+        from_: Filter emails from sender(s) (comma-separated)
+        to: Filter emails to recipient(s) (comma-separated)
+        exclude_from: Exclude emails from sender(s) (comma-separated)
+
+    Returns:
+        Gmail query string for sender/recipient filtering
+
+    Example:
+        >>> build_sender_query(from_="john@example.com")
+        'from:john@example.com'
+        >>> build_sender_query(from_="john@example.com,jane@example.com")
+        '(from:john@example.com OR from:jane@example.com)'
+        >>> build_sender_query(from_="john@example.com", exclude_from="spam@example.com")
+        'from:john@example.com -from:spam@example.com'
+    """
+    parts = []
+
+    # Handle from filter
+    if from_:
+        senders = [s.strip() for s in from_.split(",") if s.strip()]
+        if len(senders) == 1:
+            parts.append(f"from:{senders[0]}")
+        elif len(senders) > 1:
+            from_parts = " OR ".join([f"from:{s}" for s in senders])
+            parts.append(f"({from_parts})")
+
+    # Handle to filter
+    if to:
+        recipients = [r.strip() for r in to.split(",") if r.strip()]
+        if len(recipients) == 1:
+            parts.append(f"to:{recipients[0]}")
+        elif len(recipients) > 1:
+            to_parts = " OR ".join([f"to:{r}" for r in recipients])
+            parts.append(f"({to_parts})")
+
+    # Handle exclude_from filter
+    if exclude_from:
+        excludes = [e.strip() for e in exclude_from.split(",") if e.strip()]
+        for exclude in excludes:
+            parts.append(f"-from:{exclude}")
+
+    return " ".join(parts)
