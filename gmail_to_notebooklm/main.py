@@ -1,5 +1,6 @@
 """Command-line interface for Gmail to NotebookLM converter."""
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -19,18 +20,19 @@ if sys.platform == "win32":
 from gmail_to_notebooklm import __version__
 from gmail_to_notebooklm.auth import authenticate, AuthenticationError
 from gmail_to_notebooklm.config import load_config, ConfigError
-from gmail_to_notebooklm.converter import MarkdownConverter, ConversionError
+from gmail_to_notebooklm.core import ExportEngine, ProgressUpdate, ExportResult
 from gmail_to_notebooklm.gmail_client import GmailClient, GmailAPIError
-from gmail_to_notebooklm.parser import EmailParser, EmailParseError
-from gmail_to_notebooklm.utils import (
-    create_filename,
-    write_markdown_file,
-    get_env_or_default,
-    build_date_query,
-    build_sender_query,
-    generate_index_file,
-    get_date_subdirectory,
-)
+from gmail_to_notebooklm.utils import get_env_or_default
+
+
+# Exit codes
+EXIT_SUCCESS = 0
+EXIT_CONFIG_ERROR = 1
+EXIT_AUTH_ERROR = 2
+EXIT_API_ERROR = 3
+EXIT_NO_RESULTS = 4
+EXIT_EXPORT_ERROR = 5
+EXIT_USER_CANCEL = 130
 
 
 @click.command()
@@ -132,6 +134,26 @@ from gmail_to_notebooklm.utils import (
     type=click.Choice(["YYYY/MM", "YYYY-MM", "YYYY/MM/DD", "YYYY-MM-DD"], case_sensitive=False),
     help="Date format for organization (default: YYYY/MM)",
 )
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate settings and show what would be exported without actually exporting",
+)
+@click.option(
+    "--quiet",
+    is_flag=True,
+    help="Suppress all output except errors (useful for CI/CD)",
+)
+@click.option(
+    "--json-output",
+    is_flag=True,
+    help="Output results in JSON format (useful for scripting)",
+)
+@click.option(
+    "--list-labels",
+    is_flag=True,
+    help="List all available Gmail labels and exit",
+)
 @click.version_option(version=__version__)
 def cli(
     config: Optional[str],
@@ -151,6 +173,10 @@ def cli(
     create_index: bool,
     organize_by_date: bool,
     date_format: str,
+    dry_run: bool,
+    quiet: bool,
+    json_output: bool,
+    list_labels: bool,
 ):
     """
     Convert Gmail emails from a label to Markdown files for NotebookLM.
@@ -166,14 +192,23 @@ def cli(
     First run will open a browser for Gmail authorization.
     """
     try:
+        # Handle quiet mode
+        def log(message: str, err: bool = False):
+            """Log message unless in quiet mode."""
+            if not quiet:
+                click.echo(message, err=err)
+
+        # Handle JSON output mode
+        json_result = {}
+
         # Load configuration
         try:
             cfg = load_config(config)
-            if verbose or cfg.get("verbose", False):
-                click.echo(f"Loaded configuration from: {cfg.config_path or 'defaults'}")
+            if verbose and not quiet:
+                log(f"Loaded configuration from: {cfg.config_path or 'defaults'}")
         except ConfigError as e:
-            click.echo(f"✗ Configuration error: {e}", err=True)
-            sys.exit(1)
+            log(f"✗ Configuration error: {e}", err=True)
+            sys.exit(EXIT_CONFIG_ERROR)
 
         # Merge CLI args with config (CLI takes precedence)
         cli_args = {
@@ -196,219 +231,197 @@ def cli(
         }
         settings = cfg.merge_with_cli_args(cli_args)
 
-        # Extract settings
-        label = settings.get("label")
-        query = settings.get("query")
-        after = settings.get("after")
-        before = settings.get("before")
-        from_ = settings.get("from")
-        to = settings.get("to")
-        exclude_from = settings.get("exclude_from")
-        output_dir = settings.get("output_dir")
-        max_results = settings.get("max_results")
-        credentials = settings.get("credentials", "credentials.json")
-        token = settings.get("token", "token.json")
-        verbose = settings.get("verbose", False)
-        overwrite = settings.get("overwrite", False)
-        create_index = settings.get("create_index", False)
-        organize_by_date = settings.get("organize_by_date", False)
-        date_format = settings.get("date_format", "YYYY/MM")
+        # Use credentials/token from settings or defaults
+        credentials_path = settings.get("credentials", "credentials.json")
+        token_path = settings.get("token", "token.json")
+
+        # Handle --list-labels command
+        if list_labels:
+            log("Authenticating with Gmail...")
+            try:
+                creds = authenticate(credentials_path=credentials_path, token_path=token_path)
+                client = GmailClient(creds)
+                labels = client.list_labels()
+
+                if json_output:
+                    print(json.dumps({"labels": labels}, indent=2))
+                else:
+                    log("\nAvailable Gmail labels:")
+                    log("=" * 50)
+                    for l in sorted(labels):
+                        log(f"  • {l}")
+                    log("=" * 50)
+                    log(f"\nTotal: {len(labels)} labels")
+
+                sys.exit(EXIT_SUCCESS)
+
+            except AuthenticationError as e:
+                log(f"✗ Authentication failed: {e}", err=True)
+                if json_output:
+                    print(json.dumps({"error": str(e), "exit_code": EXIT_AUTH_ERROR}))
+                sys.exit(EXIT_AUTH_ERROR)
+            except GmailAPIError as e:
+                log(f"✗ API error: {e}", err=True)
+                if json_output:
+                    print(json.dumps({"error": str(e), "exit_code": EXIT_API_ERROR}))
+                sys.exit(EXIT_API_ERROR)
+
+        # Determine output directory with fallback
+        if settings.get("output_dir") is None:
+            settings["output_dir"] = get_env_or_default("GMAIL_TO_NBL_OUTPUT_DIR", "./output")
 
         # Validate required fields
-        if not label and not query and not after and not before and not from_ and not to:
-            click.echo(
+        if not settings.get("label") and not settings.get("query") and not after and not before and not from_ and not to:
+            log(
                 "✗ Error: At least one filter is required: --label, --query, --after, --before, --from, or --to",
                 err=True,
             )
-            sys.exit(1)
+            if json_output:
+                print(json.dumps({"error": "No filters specified", "exit_code": EXIT_CONFIG_ERROR}))
+            sys.exit(EXIT_CONFIG_ERROR)
 
-        # Build date query if date filters provided
-        try:
-            date_query = build_date_query(after, before) if (after or before) else None
-        except ValueError as e:
-            click.echo(f"✗ Date validation error: {e}", err=True)
-            sys.exit(1)
+        # Show export info
+        if verbose and not quiet:
+            log(f"Gmail to NotebookLM Converter v{__version__}")
+            if settings.get("label"):
+                log(f"Label: {settings['label']}")
+            if settings.get("query"):
+                log(f"Query: {settings['query']}")
+            if after:
+                log(f"After: {after}")
+            if before:
+                log(f"Before: {before}")
+            log(f"Output directory: {settings['output_dir']}")
+            if max_results:
+                log(f"Max results: {max_results}")
+            if dry_run:
+                log("\n⚠️  DRY RUN MODE - No files will be created")
+            log()
 
-        # Build sender/recipient query if filters provided
-        sender_query = (
-            build_sender_query(from_, to, exclude_from)
-            if (from_ or to or exclude_from)
-            else None
+        # Create callbacks for progress reporting
+        current_step = [0]  # Use list to allow mutation in nested function
+
+        def progress_callback(update: ProgressUpdate):
+            """Report progress updates."""
+            if quiet or json_output:
+                return
+
+            # Only show step changes in non-verbose mode
+            if update.step != current_step[0]:
+                current_step[0] = update.step
+                log(f"\n{update.message}")
+
+            # Show detailed progress in verbose mode
+            if verbose and update.total > 0:
+                percent = int(update.percent)
+                log(f"  Progress: {update.current}/{update.total} ({percent}%)")
+
+        def status_callback(message: str):
+            """Report status messages."""
+            if verbose and not quiet and not json_output:
+                log(f"  {message}")
+
+        # Create export engine
+        engine = ExportEngine(
+            progress_callback=progress_callback,
+            status_callback=status_callback
         )
 
-        # Combine all queries
-        if date_query:
-            if query:
-                query = f"{query} {date_query}"
-            else:
-                query = date_query
+        # Run export
+        if not quiet and not json_output:
+            log("Starting export...\n")
 
-        if sender_query:
-            if query:
-                query = f"{query} {sender_query}"
-            else:
-                query = sender_query
+        result: ExportResult = engine.export(settings, dry_run=dry_run)
 
-        # Determine output directory with fallback
-        if output_dir is None:
-            output_dir = get_env_or_default("GMAIL_TO_NBL_OUTPUT_DIR", "./output")
+        # Handle results
+        if json_output:
+            # Machine-readable JSON output
+            output = {
+                "success": result.success,
+                "files_created": result.files_created,
+                "output_dir": str(result.output_dir),
+                "duration_seconds": result.duration_seconds,
+                "stats": result.stats,
+                "errors": result.errors,
+                "dry_run": dry_run,
+                "exit_code": EXIT_SUCCESS if result.success else EXIT_EXPORT_ERROR,
+            }
+            print(json.dumps(output, indent=2))
 
-        output_path = Path(output_dir)
-
-        if verbose:
-            click.echo(f"Gmail to NotebookLM Converter v{__version__}")
-            if label:
-                click.echo(f"Label: {label}")
-            if query:
-                click.echo(f"Query: {query}")
-            if after:
-                click.echo(f"After: {after}")
-            if before:
-                click.echo(f"Before: {before}")
-            click.echo(f"Output directory: {output_path}")
-            if max_results:
-                click.echo(f"Max results: {max_results}")
-            click.echo()
-
-        # Step 1: Authenticate
-        click.echo("Step 1/5: Authenticating with Gmail...")
-        try:
-            creds = authenticate(credentials_path=credentials, token_path=token)
-            click.echo("✓ Authentication successful")
-        except AuthenticationError as e:
-            click.echo(f"✗ Authentication failed: {e}", err=True)
-            sys.exit(1)
-        except FileNotFoundError as e:
-            click.echo(f"✗ {e}", err=True)
-            click.echo("\nSee OAUTH_SETUP.md for setup instructions.", err=True)
-            sys.exit(1)
-
-        # Step 2: Initialize Gmail client
-        click.echo("\nStep 2/5: Connecting to Gmail API...")
-        try:
-            client = GmailClient(creds)
-            click.echo("✓ Connected to Gmail API")
-        except GmailAPIError as e:
-            click.echo(f"✗ Failed to connect: {e}", err=True)
-            sys.exit(1)
-
-        # Step 3: Fetch emails
-        if label and query:
-            search_desc = f"label '{label}' with query: {query}"
-        elif label:
-            search_desc = f"label '{label}'"
         else:
-            search_desc = f"query: {query}"
+            # Human-readable output
+            if not quiet:
+                log("\n" + "=" * 50)
 
-        click.echo(f"\nStep 3/5: Fetching emails from {search_desc}...")
-        try:
-            messages = client.get_messages_batch(label, max_results, query)
-            if not messages:
-                click.echo(f"No emails found matching {search_desc}")
-                if label:
-                    click.echo("\nTip: Label names are case-sensitive.")
-                sys.exit(0)
-            click.echo(f"✓ Found {len(messages)} email(s)")
-        except GmailAPIError as e:
-            click.echo(f"✗ Failed to fetch emails: {e}", err=True)
-            sys.exit(1)
+                if result.success:
+                    if dry_run:
+                        log("✓ Dry run completed successfully!")
+                        log("=" * 50)
+                        log(f"Would export: {result.stats.get('emails_found', 0)} emails")
+                        log(f"Output directory: {result.output_dir.absolute()}")
+                        log("\nNo files were created (dry run mode)")
+                    else:
+                        log("✓ Export completed successfully!")
+                        log("=" * 50)
+                        log(f"Emails exported: {result.files_created}")
+                        log(f"Output directory: {result.output_dir.absolute()}")
 
-        # Step 4: Parse emails
-        click.echo("\nStep 4/5: Parsing email content...")
-        try:
-            parser = EmailParser()
-            parsed_emails = parser.parse_messages_batch(messages)
-            click.echo(f"✓ Parsed {len(parsed_emails)} email(s)")
-        except EmailParseError as e:
-            click.echo(f"✗ Failed to parse emails: {e}", err=True)
-            sys.exit(1)
+                        if result.errors:
+                            log(f"\n⚠️  Warnings: {len(result.errors)} files had errors")
 
-        # Step 5: Convert to Markdown and save
-        click.echo("\nStep 5/5: Converting to Markdown and saving...")
-        try:
-            converter = MarkdownConverter(include_headers=True, body_width=0)
-            converted = converter.convert_emails_batch(parsed_emails)
-
-            # Write files and track filenames for index
-            saved_count = 0
-            filenames = {}  # email_id -> filename mapping (with subdirectory if applicable)
-            for email_id, markdown_content in converted:
-                # Find original email to get subject
-                original = next(
-                    (e for e in parsed_emails if e["id"] == email_id), None
-                )
-                if original:
-                    subject = original.get("subject", "No Subject")
+                        log("\nNext steps:")
+                        log("1. Review the Markdown files in the output directory")
+                        log("2. Go to https://notebooklm.google.com/")
+                        log("3. Create a notebook and upload these files as sources")
                 else:
-                    subject = "Unknown"
+                    log("✗ Export failed")
+                    log("=" * 50)
+                    if result.errors:
+                        log(f"\nErrors:")
+                        for error in result.errors[:5]:  # Show first 5 errors
+                            log(f"  • {error}")
+                        if len(result.errors) > 5:
+                            log(f"  ... and {len(result.errors) - 5} more")
 
-                # Create filename
-                filename = create_filename(subject, email_id)
-
-                # Determine output directory (with date subdirectory if enabled)
-                if organize_by_date and original:
-                    date_subdir = get_date_subdirectory(original, date_format)
-                    target_dir = output_path / date_subdir
-                    relative_path = f"{date_subdir}/{filename}"
-                else:
-                    target_dir = output_path
-                    relative_path = filename
-
-                # Write file
-                try:
-                    file_path = write_markdown_file(
-                        target_dir, filename, markdown_content, overwrite=overwrite
-                    )
-                    filenames[email_id] = relative_path
-                    if verbose:
-                        click.echo(f"  Saved: {relative_path}")
-                    saved_count += 1
-                except Exception as e:
-                    click.echo(
-                        f"  Warning: Failed to save {filename}: {e}", err=True
-                    )
-
-            click.echo(f"✓ Saved {saved_count} Markdown file(s) to {output_path}")
-
-            # Generate index file if requested
-            if create_index and saved_count > 0:
-                try:
-                    click.echo("\nGenerating index file...")
-                    # Create list of (email_id, email_data) tuples
-                    email_list = [(e["id"], e) for e in parsed_emails if e["id"] in filenames]
-                    index_path = generate_index_file(output_path, email_list, filenames)
-                    click.echo(f"✓ Created index file: {index_path.name}")
-                except Exception as e:
-                    click.echo(f"  Warning: Failed to create index: {e}", err=True)
-
-        except ConversionError as e:
-            click.echo(f"✗ Failed to convert emails: {e}", err=True)
-            sys.exit(1)
-        except Exception as e:
-            click.echo(f"✗ Failed to save files: {e}", err=True)
-            sys.exit(1)
-
-        # Success summary
-        click.echo("\n" + "=" * 50)
-        click.echo("✓ Export completed successfully!")
-        click.echo("=" * 50)
-        click.echo(f"Emails exported: {saved_count}")
-        click.echo(f"Output directory: {output_path.absolute()}")
-        click.echo("\nNext steps:")
-        click.echo("1. Review the Markdown files in the output directory")
-        click.echo("2. Go to https://notebooklm.google.com/")
-        click.echo("3. Create a notebook and upload these files as sources")
+        # Exit with appropriate code
+        if result.success:
+            sys.exit(EXIT_SUCCESS)
+        elif result.stats.get("emails_found") == 0:
+            sys.exit(EXIT_NO_RESULTS)
+        else:
+            sys.exit(EXIT_EXPORT_ERROR)
 
     except KeyboardInterrupt:
-        click.echo("\n\nOperation cancelled by user.", err=True)
-        sys.exit(130)
-    except Exception as e:
-        click.echo(f"\n✗ Unexpected error: {e}", err=True)
-        if verbose:
-            import traceback
+        if json_output:
+            print(json.dumps({"error": "Cancelled by user", "exit_code": EXIT_USER_CANCEL}))
+        else:
+            log("\n\nOperation cancelled by user.", err=True)
+        sys.exit(EXIT_USER_CANCEL)
 
-            traceback.print_exc()
-        sys.exit(1)
+    except AuthenticationError as e:
+        if json_output:
+            print(json.dumps({"error": str(e), "exit_code": EXIT_AUTH_ERROR}))
+        else:
+            log(f"\n✗ Authentication failed: {e}", err=True)
+            log("\nSee OAUTH_SETUP.md for setup instructions.", err=True)
+        sys.exit(EXIT_AUTH_ERROR)
+
+    except GmailAPIError as e:
+        if json_output:
+            print(json.dumps({"error": str(e), "exit_code": EXIT_API_ERROR}))
+        else:
+            log(f"\n✗ Gmail API error: {e}", err=True)
+        sys.exit(EXIT_API_ERROR)
+
+    except Exception as e:
+        if json_output:
+            print(json.dumps({"error": str(e), "exit_code": EXIT_EXPORT_ERROR}))
+        else:
+            log(f"\n✗ Unexpected error: {e}", err=True)
+            if verbose:
+                import traceback
+                traceback.print_exc()
+        sys.exit(EXIT_EXPORT_ERROR)
 
 
 if __name__ == "__main__":
