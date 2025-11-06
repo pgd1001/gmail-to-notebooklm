@@ -1,6 +1,8 @@
 """Utility functions for file operations and text sanitization."""
 
 import re
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
@@ -237,3 +239,259 @@ def get_env_or_default(key: str, default: Optional[str] = None) -> Optional[str]
     import os
 
     return os.environ.get(key, default)
+
+
+def validate_date(date_str: str) -> str:
+    """
+    Validate and normalize date string for Gmail query.
+
+    Accepts YYYY-MM-DD or YYYY/MM/DD format.
+
+    Args:
+        date_str: Date string to validate
+
+    Returns:
+        Normalized date string in YYYY/MM/DD format
+
+    Raises:
+        ValueError: If date format is invalid
+
+    Example:
+        >>> validate_date("2024-01-15")
+        '2024/01/15'
+        >>> validate_date("2024/01/15")
+        '2024/01/15'
+    """
+    # Try parsing with different formats
+    for fmt in ["%Y-%m-%d", "%Y/%m/%d"]:
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            # Return in Gmail-compatible format (YYYY/MM/DD)
+            return dt.strftime("%Y/%m/%d")
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Invalid date format: '{date_str}'. Use YYYY-MM-DD or YYYY/MM/DD"
+    )
+
+
+def build_date_query(after: Optional[str] = None, before: Optional[str] = None) -> str:
+    """
+    Build Gmail query string from date filters.
+
+    Args:
+        after: Filter emails after this date (YYYY-MM-DD or YYYY/MM/DD)
+        before: Filter emails before this date (YYYY-MM-DD or YYYY/MM/DD)
+
+    Returns:
+        Gmail query string for date filtering
+
+    Raises:
+        ValueError: If date format is invalid
+
+    Example:
+        >>> build_date_query(after="2024-01-01")
+        'after:2024/01/01'
+        >>> build_date_query(after="2024-01-01", before="2024-12-31")
+        'after:2024/01/01 before:2024/12/31'
+    """
+    parts = []
+
+    if after:
+        normalized_date = validate_date(after)
+        parts.append(f"after:{normalized_date}")
+
+    if before:
+        normalized_date = validate_date(before)
+        parts.append(f"before:{normalized_date}")
+
+    return " ".join(parts)
+
+
+def build_sender_query(
+    from_: Optional[str] = None,
+    to: Optional[str] = None,
+    exclude_from: Optional[str] = None,
+) -> str:
+    """
+    Build Gmail query string from sender/recipient filters.
+
+    Args:
+        from_: Filter emails from sender(s) (comma-separated)
+        to: Filter emails to recipient(s) (comma-separated)
+        exclude_from: Exclude emails from sender(s) (comma-separated)
+
+    Returns:
+        Gmail query string for sender/recipient filtering
+
+    Example:
+        >>> build_sender_query(from_="john@example.com")
+        'from:john@example.com'
+        >>> build_sender_query(from_="john@example.com,jane@example.com")
+        '(from:john@example.com OR from:jane@example.com)'
+        >>> build_sender_query(from_="john@example.com", exclude_from="spam@example.com")
+        'from:john@example.com -from:spam@example.com'
+    """
+    parts = []
+
+    # Handle from filter
+    if from_:
+        senders = [s.strip() for s in from_.split(",") if s.strip()]
+        if len(senders) == 1:
+            parts.append(f"from:{senders[0]}")
+        elif len(senders) > 1:
+            from_parts = " OR ".join([f"from:{s}" for s in senders])
+            parts.append(f"({from_parts})")
+
+    # Handle to filter
+    if to:
+        recipients = [r.strip() for r in to.split(",") if r.strip()]
+        if len(recipients) == 1:
+            parts.append(f"to:{recipients[0]}")
+        elif len(recipients) > 1:
+            to_parts = " OR ".join([f"to:{r}" for r in recipients])
+            parts.append(f"({to_parts})")
+
+    # Handle exclude_from filter
+    if exclude_from:
+        excludes = [e.strip() for e in exclude_from.split(",") if e.strip()]
+        for exclude in excludes:
+            parts.append(f"-from:{exclude}")
+
+    return " ".join(parts)
+
+
+def generate_index_file(
+    output_dir: Path, emails: list[tuple[str, dict]], filenames: dict[str, str]
+) -> Path:
+    """
+    Generate index markdown file with table of contents.
+
+    Args:
+        output_dir: Output directory path
+        emails: List of (email_id, email_data) tuples
+        filenames: Dictionary mapping email_id to filename
+
+    Returns:
+        Path to created index file
+
+    Example index structure:
+        # Email Export Index
+
+        Total emails: 42
+
+        ## Emails by Date
+
+        | Date | From | Subject | File |
+        |------|------|---------|------|
+        | 2024-01-15 | john@example.com | Project Update | [Link](./file.md) |
+    """
+    output_dir = Path(output_dir)
+    ensure_directory(output_dir)
+
+    # Sort emails by date (newest first)
+    sorted_emails = sorted(
+        emails, key=lambda x: x[1].get("date", ""), reverse=True
+    )
+
+    # Build index content
+    lines = [
+        "# Email Export Index",
+        "",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"Total emails: {len(emails)}",
+        "",
+        "## Emails by Date",
+        "",
+        "| Date | From | Subject | File |",
+        "|------|------|---------|------|",
+    ]
+
+    for email_id, email_data in sorted_emails:
+        # Extract email metadata
+        date_str = email_data.get("date", "Unknown")
+        # Parse and format date if possible
+        try:
+            # Try to parse date string and format as YYYY-MM-DD
+            from email.utils import parsedate_to_datetime
+
+            date_obj = parsedate_to_datetime(date_str)
+            date_display = date_obj.strftime("%Y-%m-%d")
+        except (ValueError, TypeError, AttributeError):
+            date_display = date_str[:10] if len(date_str) > 10 else date_str
+
+        from_addr = email_data.get("from", "Unknown")
+        subject = email_data.get("subject", "No Subject")
+
+        # Truncate long values for table
+        from_display = truncate_text(from_addr, 30)
+        subject_display = truncate_text(subject, 50)
+
+        # Get filename
+        filename = filenames.get(email_id, "unknown.md")
+
+        # Create markdown link
+        link = f"[{filename}](./{filename})"
+
+        # Add row
+        lines.append(
+            f"| {date_display} | {from_display} | {subject_display} | {link} |"
+        )
+
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("*Generated by [Gmail to NotebookLM](https://github.com/pgd1001/gmail-to-notebooklm)*")
+
+    # Write index file
+    index_content = "\n".join(lines)
+    index_path = output_dir / "INDEX.md"
+
+    try:
+        index_path.write_text(index_content, encoding="utf-8")
+        return index_path
+    except Exception as e:
+        raise OSError(f"Failed to write index file {index_path}: {e}")
+
+
+def get_date_subdirectory(email_data: dict, date_format: str = "YYYY/MM") -> str:
+    """
+    Get date-based subdirectory path from email data.
+
+    Args:
+        email_data: Parsed email data dictionary
+        date_format: Date format for subdirectory (YYYY/MM, YYYY-MM, YYYY/MM/DD, YYYY-MM-DD)
+
+    Returns:
+        Subdirectory path string (e.g., "2024/01" or "2024-01")
+
+    Example:
+        >>> email_data = {"date": "Mon, 15 Jan 2024 10:30:00 +0000"}
+        >>> get_date_subdirectory(email_data, "YYYY/MM")
+        '2024/01'
+        >>> get_date_subdirectory(email_data, "YYYY-MM")
+        '2024-01'
+    """
+    date_str = email_data.get("date", "")
+
+    try:
+        # Parse email date
+        date_obj = parsedate_to_datetime(date_str)
+
+        # Format based on specified format
+        if date_format == "YYYY/MM":
+            return f"{date_obj.year}/{date_obj.month:02d}"
+        elif date_format == "YYYY-MM":
+            return f"{date_obj.year}-{date_obj.month:02d}"
+        elif date_format == "YYYY/MM/DD":
+            return f"{date_obj.year}/{date_obj.month:02d}/{date_obj.day:02d}"
+        elif date_format == "YYYY-MM-DD":
+            return f"{date_obj.year}-{date_obj.month:02d}-{date_obj.day:02d}"
+        else:
+            # Default to YYYY/MM
+            return f"{date_obj.year}/{date_obj.month:02d}"
+
+    except (ValueError, TypeError, AttributeError):
+        # If date parsing fails, use "Unknown" subdirectory
+        return "Unknown"

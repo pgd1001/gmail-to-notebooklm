@@ -18,6 +18,7 @@ if sys.platform == "win32":
 
 from gmail_to_notebooklm import __version__
 from gmail_to_notebooklm.auth import authenticate, AuthenticationError
+from gmail_to_notebooklm.config import load_config, ConfigError
 from gmail_to_notebooklm.converter import MarkdownConverter, ConversionError
 from gmail_to_notebooklm.gmail_client import GmailClient, GmailAPIError
 from gmail_to_notebooklm.parser import EmailParser, EmailParseError
@@ -25,15 +26,58 @@ from gmail_to_notebooklm.utils import (
     create_filename,
     write_markdown_file,
     get_env_or_default,
+    build_date_query,
+    build_sender_query,
+    generate_index_file,
+    get_date_subdirectory,
 )
 
 
 @click.command()
 @click.option(
+    "--config",
+    "-c",
+    default=None,
+    type=click.Path(exists=True),
+    help="Path to YAML configuration file",
+)
+@click.option(
     "--label",
     "-l",
-    required=True,
+    default=None,
     help="Gmail label to export (case-sensitive)",
+)
+@click.option(
+    "--query",
+    "-q",
+    default=None,
+    help="Gmail search query (uses Gmail search syntax)",
+)
+@click.option(
+    "--after",
+    default=None,
+    help="Filter emails after this date (YYYY-MM-DD or YYYY/MM/DD)",
+)
+@click.option(
+    "--before",
+    default=None,
+    help="Filter emails before this date (YYYY-MM-DD or YYYY/MM/DD)",
+)
+@click.option(
+    "--from",
+    "from_",
+    default=None,
+    help="Filter emails from sender(s) (comma-separated)",
+)
+@click.option(
+    "--to",
+    default=None,
+    help="Filter emails to recipient(s) (comma-separated)",
+)
+@click.option(
+    "--exclude-from",
+    default=None,
+    help="Exclude emails from sender(s) (comma-separated)",
 )
 @click.option(
     "--output-dir",
@@ -51,13 +95,13 @@ from gmail_to_notebooklm.utils import (
 )
 @click.option(
     "--credentials",
-    default="credentials.json",
+    default=None,
     type=click.Path(exists=True),
     help="Path to credentials.json (default: ./credentials.json)",
 )
 @click.option(
     "--token",
-    default="token.json",
+    default=None,
     type=click.Path(),
     help="Path to save/load token (default: ./token.json)",
 )
@@ -72,15 +116,41 @@ from gmail_to_notebooklm.utils import (
     is_flag=True,
     help="Overwrite existing files",
 )
+@click.option(
+    "--create-index",
+    is_flag=True,
+    help="Create INDEX.md file with table of contents",
+)
+@click.option(
+    "--organize-by-date",
+    is_flag=True,
+    help="Organize files into date-based subdirectories",
+)
+@click.option(
+    "--date-format",
+    default="YYYY/MM",
+    type=click.Choice(["YYYY/MM", "YYYY-MM", "YYYY/MM/DD", "YYYY-MM-DD"], case_sensitive=False),
+    help="Date format for organization (default: YYYY/MM)",
+)
 @click.version_option(version=__version__)
 def cli(
-    label: str,
+    config: Optional[str],
+    label: Optional[str],
+    query: Optional[str],
+    after: Optional[str],
+    before: Optional[str],
+    from_: Optional[str],
+    to: Optional[str],
+    exclude_from: Optional[str],
     output_dir: Optional[str],
     max_results: Optional[int],
-    credentials: str,
-    token: str,
+    credentials: Optional[str],
+    token: Optional[str],
     verbose: bool,
     overwrite: bool,
+    create_index: bool,
+    organize_by_date: bool,
+    date_format: str,
 ):
     """
     Convert Gmail emails from a label to Markdown files for NotebookLM.
@@ -96,7 +166,90 @@ def cli(
     First run will open a browser for Gmail authorization.
     """
     try:
-        # Determine output directory
+        # Load configuration
+        try:
+            cfg = load_config(config)
+            if verbose or cfg.get("verbose", False):
+                click.echo(f"Loaded configuration from: {cfg.config_path or 'defaults'}")
+        except ConfigError as e:
+            click.echo(f"✗ Configuration error: {e}", err=True)
+            sys.exit(1)
+
+        # Merge CLI args with config (CLI takes precedence)
+        cli_args = {
+            "label": label,
+            "query": query,
+            "after": after,
+            "before": before,
+            "from": from_,
+            "to": to,
+            "exclude_from": exclude_from,
+            "output_dir": output_dir,
+            "max_results": max_results,
+            "credentials": credentials,
+            "token": token,
+            "verbose": verbose,
+            "overwrite": overwrite,
+            "create_index": create_index,
+            "organize_by_date": organize_by_date,
+            "date_format": date_format,
+        }
+        settings = cfg.merge_with_cli_args(cli_args)
+
+        # Extract settings
+        label = settings.get("label")
+        query = settings.get("query")
+        after = settings.get("after")
+        before = settings.get("before")
+        from_ = settings.get("from")
+        to = settings.get("to")
+        exclude_from = settings.get("exclude_from")
+        output_dir = settings.get("output_dir")
+        max_results = settings.get("max_results")
+        credentials = settings.get("credentials", "credentials.json")
+        token = settings.get("token", "token.json")
+        verbose = settings.get("verbose", False)
+        overwrite = settings.get("overwrite", False)
+        create_index = settings.get("create_index", False)
+        organize_by_date = settings.get("organize_by_date", False)
+        date_format = settings.get("date_format", "YYYY/MM")
+
+        # Validate required fields
+        if not label and not query and not after and not before and not from_ and not to:
+            click.echo(
+                "✗ Error: At least one filter is required: --label, --query, --after, --before, --from, or --to",
+                err=True,
+            )
+            sys.exit(1)
+
+        # Build date query if date filters provided
+        try:
+            date_query = build_date_query(after, before) if (after or before) else None
+        except ValueError as e:
+            click.echo(f"✗ Date validation error: {e}", err=True)
+            sys.exit(1)
+
+        # Build sender/recipient query if filters provided
+        sender_query = (
+            build_sender_query(from_, to, exclude_from)
+            if (from_ or to or exclude_from)
+            else None
+        )
+
+        # Combine all queries
+        if date_query:
+            if query:
+                query = f"{query} {date_query}"
+            else:
+                query = date_query
+
+        if sender_query:
+            if query:
+                query = f"{query} {sender_query}"
+            else:
+                query = sender_query
+
+        # Determine output directory with fallback
         if output_dir is None:
             output_dir = get_env_or_default("GMAIL_TO_NBL_OUTPUT_DIR", "./output")
 
@@ -104,7 +257,14 @@ def cli(
 
         if verbose:
             click.echo(f"Gmail to NotebookLM Converter v{__version__}")
-            click.echo(f"Label: {label}")
+            if label:
+                click.echo(f"Label: {label}")
+            if query:
+                click.echo(f"Query: {query}")
+            if after:
+                click.echo(f"After: {after}")
+            if before:
+                click.echo(f"Before: {before}")
             click.echo(f"Output directory: {output_path}")
             if max_results:
                 click.echo(f"Max results: {max_results}")
@@ -133,12 +293,20 @@ def cli(
             sys.exit(1)
 
         # Step 3: Fetch emails
-        click.echo(f"\nStep 3/5: Fetching emails from label '{label}'...")
+        if label and query:
+            search_desc = f"label '{label}' with query: {query}"
+        elif label:
+            search_desc = f"label '{label}'"
+        else:
+            search_desc = f"query: {query}"
+
+        click.echo(f"\nStep 3/5: Fetching emails from {search_desc}...")
         try:
-            messages = client.get_messages_batch(label, max_results)
+            messages = client.get_messages_batch(label, max_results, query)
             if not messages:
-                click.echo(f"No emails found in label '{label}'")
-                click.echo("\nTip: Label names are case-sensitive.")
+                click.echo(f"No emails found matching {search_desc}")
+                if label:
+                    click.echo("\nTip: Label names are case-sensitive.")
                 sys.exit(0)
             click.echo(f"✓ Found {len(messages)} email(s)")
         except GmailAPIError as e:
@@ -161,8 +329,9 @@ def cli(
             converter = MarkdownConverter(include_headers=True, body_width=0)
             converted = converter.convert_emails_batch(parsed_emails)
 
-            # Write files
+            # Write files and track filenames for index
             saved_count = 0
+            filenames = {}  # email_id -> filename mapping (with subdirectory if applicable)
             for email_id, markdown_content in converted:
                 # Find original email to get subject
                 original = next(
@@ -176,13 +345,23 @@ def cli(
                 # Create filename
                 filename = create_filename(subject, email_id)
 
+                # Determine output directory (with date subdirectory if enabled)
+                if organize_by_date and original:
+                    date_subdir = get_date_subdirectory(original, date_format)
+                    target_dir = output_path / date_subdir
+                    relative_path = f"{date_subdir}/{filename}"
+                else:
+                    target_dir = output_path
+                    relative_path = filename
+
                 # Write file
                 try:
                     file_path = write_markdown_file(
-                        output_path, filename, markdown_content, overwrite=overwrite
+                        target_dir, filename, markdown_content, overwrite=overwrite
                     )
+                    filenames[email_id] = relative_path
                     if verbose:
-                        click.echo(f"  Saved: {file_path.name}")
+                        click.echo(f"  Saved: {relative_path}")
                     saved_count += 1
                 except Exception as e:
                     click.echo(
@@ -190,6 +369,17 @@ def cli(
                     )
 
             click.echo(f"✓ Saved {saved_count} Markdown file(s) to {output_path}")
+
+            # Generate index file if requested
+            if create_index and saved_count > 0:
+                try:
+                    click.echo("\nGenerating index file...")
+                    # Create list of (email_id, email_data) tuples
+                    email_list = [(e["id"], e) for e in parsed_emails if e["id"] in filenames]
+                    index_path = generate_index_file(output_path, email_list, filenames)
+                    click.echo(f"✓ Created index file: {index_path.name}")
+                except Exception as e:
+                    click.echo(f"  Warning: Failed to create index: {e}", err=True)
 
         except ConversionError as e:
             click.echo(f"✗ Failed to convert emails: {e}", err=True)

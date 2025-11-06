@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 
 class GmailAPIError(Exception):
@@ -61,30 +62,40 @@ class GmailClient:
             raise GmailAPIError(f"Failed to fetch labels: {e}")
 
     def list_messages(
-        self, label_name: str, max_results: Optional[int] = None
+        self,
+        label_name: Optional[str] = None,
+        max_results: Optional[int] = None,
+        query: Optional[str] = None,
     ) -> List[str]:
         """
-        List message IDs for a given label.
+        List message IDs for a given label and/or query.
 
         Args:
-            label_name: Name of the Gmail label
+            label_name: Name of the Gmail label (optional if query provided)
             max_results: Maximum number of messages to return (None = all)
+            query: Gmail search query string (optional)
 
         Returns:
             List of message IDs
 
         Raises:
-            GmailAPIError: If API call fails or label not found
+            GmailAPIError: If API call fails, label not found, or neither label nor query provided
         """
-        # Get label ID
-        label_id = self.get_label_id(label_name)
-        if label_id is None:
-            available_labels = self.list_labels()
-            raise GmailAPIError(
-                f"Label '{label_name}' not found.\n"
-                f"Available labels: {', '.join(available_labels)}\n"
-                f"Note: Label names are case-sensitive."
-            )
+        # Validate inputs
+        if not label_name and not query:
+            raise GmailAPIError("Either label_name or query must be provided")
+
+        # Get label ID if label specified
+        label_id = None
+        if label_name:
+            label_id = self.get_label_id(label_name)
+            if label_id is None:
+                available_labels = self.list_labels()
+                raise GmailAPIError(
+                    f"Label '{label_name}' not found.\n"
+                    f"Available labels: {', '.join(available_labels)}\n"
+                    f"Note: Label names are case-sensitive."
+                )
 
         message_ids = []
         page_token = None
@@ -94,8 +105,19 @@ class GmailClient:
                 # Build request parameters
                 params = {
                     "userId": self.user_id,
-                    "labelIds": [label_id],
                 }
+
+                # Add label filter if provided
+                if label_id:
+                    params["labelIds"] = [label_id]
+
+                # Add query if provided
+                if query:
+                    # Combine with label if both present
+                    if label_id:
+                        params["q"] = f"label:{label_name} {query}"
+                    else:
+                        params["q"] = query
 
                 if page_token:
                     params["pageToken"] = page_token
@@ -172,7 +194,10 @@ class GmailClient:
             raise GmailAPIError(f"Failed to list labels: {e}")
 
     def get_messages_batch(
-        self, label_name: str, max_results: Optional[int] = None
+        self,
+        label_name: Optional[str] = None,
+        max_results: Optional[int] = None,
+        query: Optional[str] = None,
     ) -> List[Dict]:
         """
         Get multiple messages with full content.
@@ -180,8 +205,9 @@ class GmailClient:
         This is a convenience method that combines list_messages and get_message.
 
         Args:
-            label_name: Name of the Gmail label
+            label_name: Name of the Gmail label (optional if query provided)
             max_results: Maximum number of messages to return
+            query: Gmail search query string (optional)
 
         Returns:
             List of message dictionaries
@@ -189,17 +215,31 @@ class GmailClient:
         Raises:
             GmailAPIError: If API calls fail
         """
-        message_ids = self.list_messages(label_name, max_results)
+        message_ids = self.list_messages(label_name, max_results, query)
 
         messages = []
-        for i, msg_id in enumerate(message_ids, 1):
-            print(f"Fetching message {i}/{len(message_ids)}...", end="\r")
-            try:
-                message = self.get_message(msg_id)
-                messages.append(message)
-            except GmailAPIError as e:
-                print(f"\nWarning: Failed to fetch message {msg_id}: {e}")
-                continue
 
-        print()  # New line after progress
+        # Use Rich progress bar for fetching messages
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+        ) as progress:
+            task = progress.add_task(
+                "[cyan]Fetching messages...", total=len(message_ids)
+            )
+
+            for msg_id in message_ids:
+                try:
+                    message = self.get_message(msg_id)
+                    messages.append(message)
+                except GmailAPIError as e:
+                    progress.console.print(
+                        f"[yellow]Warning: Failed to fetch message {msg_id}: {e}[/yellow]"
+                    )
+                    continue
+                finally:
+                    progress.update(task, advance=1)
+
         return messages

@@ -4,6 +4,7 @@ from typing import Dict, Optional
 
 import html2text
 from bs4 import BeautifulSoup
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 
 class ConversionError(Exception):
@@ -225,15 +226,28 @@ class MarkdownConverter:
         """
         converted = []
 
-        for i, email in enumerate(emails, 1):
-            print(f"Converting email {i}/{len(emails)} to Markdown...", end="\r")
-            try:
-                markdown = self.convert_email(email)
-                email_id = email.get("id", f"unknown_{i}")
-                converted.append((email_id, markdown))
-            except ConversionError as e:
-                print(f"\nWarning: Failed to convert email {email.get('id')}: {e}")
-                continue
+        # Use Rich progress bar for conversion
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+        ) as progress:
+            task = progress.add_task(
+                "[cyan]Converting to Markdown...", total=len(emails)
+            )
 
-        print()  # New line after progress
+            for i, email in enumerate(emails, 1):
+                try:
+                    markdown = self.convert_email(email)
+                    email_id = email.get("id", f"unknown_{i}")
+                    converted.append((email_id, markdown))
+                except ConversionError as e:
+                    progress.console.print(
+                        f"[yellow]Warning: Failed to convert email {email.get('id')}: {e}[/yellow]"
+                    )
+                    continue
+                finally:
+                    progress.update(task, advance=1)
+
         return converted

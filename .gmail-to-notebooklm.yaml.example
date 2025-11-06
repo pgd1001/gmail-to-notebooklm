@@ -1,0 +1,46 @@
+# Gmail to NotebookLM Configuration File Example
+# Copy this file to .gmail-to-notebooklm.yaml and customize
+
+# Gmail label to export (can be overridden with --label)
+label: "Client A"
+
+# Gmail search query (uses Gmail search syntax)
+# Either label or query is required, or both can be used together
+# query: "from:client@example.com has:attachment"
+
+# Output directory for Markdown files
+output_dir: "./exports"
+
+# Maximum number of emails to process (null = unlimited)
+max_results: 1000
+
+# OAuth credentials and token paths
+credentials_path: "./credentials.json"
+token_path: "./token.json"
+
+# Enable verbose output
+verbose: false
+
+# Overwrite existing files
+overwrite: false
+
+# Create index file with table of contents
+create_index: true
+
+# Organize files by date into subdirectories
+organize_by_date: true
+
+# Date format for organization (YYYY/MM, YYYY-MM, YYYY/MM/DD, YYYY-MM-DD)
+date_format: "YYYY/MM"
+
+# Gmail query (advanced search syntax)
+# query: "from:client@example.com has:attachment"
+
+# Date filtering (YYYY-MM-DD or YYYY/MM/DD format)
+# Filters are combined with query and label if provided
+# after: "2024-01-01"
+# before: "2024-12-31"
+
+# Sender filtering
+# from: "john@example.com"
+# exclude_from: "noreply@,automated@"
