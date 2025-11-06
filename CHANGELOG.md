@@ -8,17 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned Features
-- Core functionality implementation
-- Gmail API integration
-- OAuth 2.0 authentication
-- HTML to Markdown conversion
-- CLI interface
-- Unit test suite
+- Multiple label support in one command
 - Integration tests
 - Docker containerization
-- Configuration file support
-- Multiple label support
 - Parallel processing
+- Email thread reconstruction
+- Custom Markdown templates
+
+## [0.2.0] - 2025-11-06
+
+### Added
+- **Gmail Query Syntax Support** (#1): Use Gmail search queries with `--query` flag
+- **YAML Configuration** (#2): Store settings in `.gmail-to-notebooklm.yaml` file
+- **Date Range Filtering** (#3): Filter emails with `--after` and `--before` flags
+- **Sender/Recipient Filtering** (#4): Filter by sender (`--from`), recipient (`--to`), or exclude senders (`--exclude-from`)
+- **Rich Progress Bars** (#5): Beautiful progress visualization with spinners and completion percentages
+- **Index File Generation** (#6): Create INDEX.md table of contents with `--create-index` flag
+- **Date-Based Organization** (#7): Organize emails into date subdirectories with `--organize-by-date` flag
+- **Date Format Options**: Support for YYYY/MM, YYYY-MM, YYYY/MM/DD, YYYY-MM-DD formats via `--date-format` flag
+- **Comprehensive Test Suite** (#8): 67 tests with 53% code coverage
+- **Full Documentation** (#9): Updated all documentation with new features and examples
+
+### Changed
+- `--label` flag is now optional when using `--query`
+- Progress output now uses Rich library for better visualization
+- Email fetching, parsing, and conversion now show detailed progress
+- Warnings now displayed in color-coded format
+
+### Technical
+- Added `rich` library for terminal UI
+- Added `pyyaml` library for configuration files
+- Improved error handling in query building
+- Enhanced utils module with date validation and query building functions
+- Config module with validation and CLI argument merging
+- Version bumped from 0.1.0 to 0.2.0
+
+### Documentation
+- Updated README.md with new features
+- Updated USAGE.md with comprehensive examples
+- Updated CONFIGURATION.md with YAML format
+- Updated QUICKSTART.md with new options
+- Added PHASE1_ISSUES.md and PHASE1_ROADMAP.md for development tracking
 
 ## [0.1.0] - 2024-01-15
 
@@ -113,5 +143,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security patches
 ```
 
-[Unreleased]: https://github.com/yourusername/gmail-to-notebooklm/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/yourusername/gmail-to-notebooklm/releases/tag/v0.1.0
+[Unreleased]: https://github.com/pgd1001/gmail-to-notebooklm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/pgd1001/gmail-to-notebooklm/releases/tag/v0.2.0
+[0.1.0]: https://github.com/pgd1001/gmail-to-notebooklm/releases/tag/v0.1.0

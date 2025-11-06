@@ -28,14 +28,63 @@ This will:
 
 ## Command-Line Options
 
-### Required Arguments
+### Search Options
 
-- `--label` or `-l`: The Gmail label to export (case-sensitive)
+- `--label` or `-l`: The Gmail label to export (case-sensitive, optional if using --query)
   ```bash
   gmail-to-notebooklm --label "Client A"
   ```
 
-### Optional Arguments
+- `--query` or `-q`: Gmail search query (optional, can be combined with --label)
+  ```bash
+  gmail-to-notebooklm --query "is:unread after:2024/01/01"
+  ```
+
+### Filtering Options
+
+- `--after`: Filter emails after this date (YYYY-MM-DD or YYYY/MM/DD)
+  ```bash
+  gmail-to-notebooklm --label "Archive" --after "2024-01-01"
+  ```
+
+- `--before`: Filter emails before this date (YYYY-MM-DD or YYYY/MM/DD)
+  ```bash
+  gmail-to-notebooklm --label "Archive" --before "2024-12-31"
+  ```
+
+- `--from`: Filter emails from specific sender(s) (comma-separated)
+  ```bash
+  gmail-to-notebooklm --label "Work" --from "boss@company.com,colleague@company.com"
+  ```
+
+- `--to`: Filter emails to specific recipient(s) (comma-separated)
+  ```bash
+  gmail-to-notebooklm --label "Sent" --to "client@example.com"
+  ```
+
+- `--exclude-from`: Exclude emails from specific sender(s) (comma-separated)
+  ```bash
+  gmail-to-notebooklm --label "Inbox" --exclude-from "spam@example.com,noreply@example.com"
+  ```
+
+### Organization Options
+
+- `--organize-by-date`: Organize output files into date-based subdirectories
+  ```bash
+  gmail-to-notebooklm --label "Archive" --organize-by-date
+  ```
+
+- `--date-format`: Date format for subdirectories (YYYY/MM, YYYY-MM, YYYY/MM/DD, YYYY-MM-DD)
+  ```bash
+  gmail-to-notebooklm --label "Archive" --organize-by-date --date-format "YYYY-MM"
+  ```
+
+- `--create-index`: Generate INDEX.md file with table of contents
+  ```bash
+  gmail-to-notebooklm --label "Archive" --create-index
+  ```
+
+### General Options
 
 - `--output-dir` or `-o`: Output directory for Markdown files (default: `./output`)
   ```bash
@@ -98,10 +147,67 @@ On first run:
 1. Browser opens automatically
 2. Sign in to Google
 3. Grant permissions
-4. `token.json` is created for future use
-5. Emails are processed
 
-Subsequent runs won't require browser authentication.
+### Example 5: Using Gmail Query Syntax (v0.2.0+)
+
+```bash
+gmail-to-notebooklm --query "is:unread from:john@example.com"
+```
+
+**Result**: Exports all unread emails from john@example.com
+
+### Example 6: Filter by Date Range (v0.2.0+)
+
+```bash
+gmail-to-notebooklm --label "Archive" --after "2024-01-01" --before "2024-03-31"
+```
+
+**Result**: Exports emails from Q1 2024 only
+
+### Example 7: Filter by Sender (v0.2.0+)
+
+```bash
+gmail-to-notebooklm --label "Work" --from "boss@company.com" --output-dir "./boss-emails"
+```
+
+**Result**: Exports only emails from your boss
+
+### Example 8: Exclude Specific Senders (v0.2.0+)
+
+```bash
+gmail-to-notebooklm --label "Inbox" --exclude-from "noreply@,newsletter@" --max-results 100
+```
+
+**Result**: Exports 100 emails, excluding automated messages
+
+### Example 9: Organize by Date with Index (v0.2.0+)
+
+```bash
+gmail-to-notebooklm --label "Archive" --organize-by-date --create-index --output-dir "./organized"
+```
+
+**Result**:
+- Emails organized into `./organized/2024/01/`, `./organized/2024/02/`, etc.
+- INDEX.md file created with sortable table of all emails
+
+### Example 10: Complete Advanced Export (v0.2.0+)
+
+```bash
+gmail-to-notebooklm \
+  --label "Client ABC" \
+  --after "2024-01-01" \
+  --from "client@abc.com,team@abc.com" \
+  --organize-by-date \
+  --date-format "YYYY-MM" \
+  --create-index \
+  --output-dir "./clients/abc/2024"
+```
+
+**Result**: Comprehensive export with:
+- Date filtering (2024 only)
+- Sender filtering (specific contacts only)
+- Date-based organization (YYYY-MM format)
+- Automatic index generation
 
 ## Output Format
 

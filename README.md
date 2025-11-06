@@ -11,9 +11,14 @@ This tool automates the extraction of emails from Gmail labels and converts them
 
 ## Key Features
 
-- **Label-based extraction**: Target specific Gmail labels for conversion
+- **Flexible Email Search**: Use Gmail query syntax or label-based extraction
+- **Advanced Filtering**: Filter by date range, sender, or recipient
 - **Rich metadata**: Includes From, To, Cc, Subject, and Date headers in each file
 - **Smart HTML conversion**: Converts HTML email bodies to clean Markdown while preserving formatting
+- **Date-Based Organization**: Automatically organize emails into date-based subdirectories
+- **Index Generation**: Create a table of contents with all exported emails
+- **YAML Configuration**: Store settings in a config file with CLI override support
+- **Rich Progress Bars**: Beautiful progress visualization for long operations
 - **OAuth 2.0 security**: Secure, read-only access to your Gmail account
 - **Batch processing**: Efficiently process multiple emails at once
 - **UTF-8 encoding**: Full support for international characters
@@ -79,6 +84,18 @@ gmail-to-notebooklm --label "My Label" --output-dir "./output"
 ```bash
 # Specify output directory
 gmail-to-notebooklm --label "Work Emails" --output-dir "./work_exports"
+
+# Use Gmail query syntax
+gmail-to-notebooklm --query "is:unread after:2024/01/01"
+
+# Filter by date range
+gmail-to-notebooklm --label "Client A" --after "2024-01-01" --before "2024-12-31"
+
+# Filter by sender
+gmail-to-notebooklm --label "Projects" --from "john@example.com"
+
+# Organize by date with index
+gmail-to-notebooklm --label "Archive" --organize-by-date --create-index
 
 # Show help
 gmail-to-notebooklm --help
@@ -152,6 +169,8 @@ gmail-to-notebooklm/
 - `beautifulsoup4` - HTML parsing
 - `html2text` - Markdown conversion
 - `click` - CLI framework
+- `rich` - Terminal UI and progress bars
+- `pyyaml` - Configuration file support
 
 See [requirements.txt](requirements.txt) for complete list with versions.
 
@@ -231,14 +250,21 @@ Built with:
 
 ## Roadmap
 
-- [ ] Implement core functionality
-- [ ] Add unit tests
-- [ ] Support for multiple labels
+### Version 0.2.0 (Completed) ✅
+- [x] Implement core functionality
+- [x] Add unit tests (53% coverage)
+- [x] Gmail query syntax support
+- [x] Date range filtering
+- [x] Sender/recipient filtering
+- [x] Index file generation
+- [x] Date-based organization
+- [x] Configuration file support (YAML)
+- [x] Rich progress bars
+
+### Future Versions
+- [ ] Support for multiple labels in one command
 - [ ] Parallel processing for large label folders
 - [ ] Optional attachment extraction
-- [ ] Configuration file support
 - [ ] Docker containerization
-
----
-
-**Note**: This project is in early development. Implementation is in progress.
+- [ ] Email thread reconstruction
+- [ ] Custom Markdown templates

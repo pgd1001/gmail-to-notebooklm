@@ -4,19 +4,40 @@ Detailed configuration options for the Gmail to NotebookLM converter.
 
 ## Command-Line Arguments
 
-### Required Arguments
+### Search Arguments (v0.2.0+)
 
 | Argument | Short | Description | Example |
 |----------|-------|-------------|---------|
-| `--label` | `-l` | Gmail label to export | `--label "Client A"` |
+| `--label` | `-l` | Gmail label to export (optional if using --query) | `--label "Client A"` |
+| `--query` | `-q` | Gmail search query | `--query "is:unread"` |
 
-### Optional Arguments
+### Filtering Arguments (v0.2.0+)
+
+| Argument | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `--after` | Filter emails after date (YYYY-MM-DD) | None | `--after "2024-01-01"` |
+| `--before` | Filter emails before date (YYYY-MM-DD) | None | `--before "2024-12-31"` |
+| `--from` | Filter by sender(s) (comma-separated) | None | `--from "john@example.com"` |
+| `--to` | Filter by recipient(s) (comma-separated) | None | `--to "client@example.com"` |
+| `--exclude-from` | Exclude sender(s) (comma-separated) | None | `--exclude-from "spam@example.com"` |
+
+### Organization Arguments (v0.2.0+)
+
+| Argument | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `--organize-by-date` | Organize files into date subdirectories | `False` | `--organize-by-date` |
+| `--date-format` | Date format for subdirectories | `YYYY/MM` | `--date-format "YYYY-MM"` |
+| `--create-index` | Generate INDEX.md file | `False` | `--create-index` |
+
+### General Arguments
 
 | Argument | Short | Description | Default | Example |
 |----------|-------|-------------|---------|---------|
 | `--output-dir` | `-o` | Output directory path | `./output` | `--output-dir "./exports"` |
 | `--max-results` | `-m` | Maximum emails to process | Unlimited | `--max-results 100` |
 | `--verbose` | `-v` | Enable verbose logging | `False` | `--verbose` |
+| `--overwrite` | | Overwrite existing files | `False` | `--overwrite` |
+| `--config` | | Custom config file path | None | `--config "./my-config.yaml"` |
 | `--help` | `-h` | Show help message | - | `--help` |
 | `--version` | | Show version | - | `--version` |
 
@@ -82,26 +103,35 @@ export GMAIL_TO_NBL_MAX_RESULTS="500"
 
 **Default**: Unlimited (processes all emails in label)
 
-## Configuration File
+## Configuration File (v0.2.0+)
 
-Create a `.gmail-to-notebooklm.yaml` file in your project root or home directory for persistent configuration.
+Create a `.gmail-to-notebooklm.yaml` file for persistent configuration. The tool searches for this file in:
+1. Current directory (`./.gmail-to-notebooklm.yaml`)
+2. Home directory (`~/.gmail-to-notebooklm.yaml`)
+3. Custom path via `--config` flag
 
 ### Example Configuration File
 
 **.gmail-to-notebooklm.yaml**:
 ```yaml
-# Default output directory
+# Output configuration
 output_dir: "./exports"
+overwrite: false
 
-# Maximum results per label
+# Search configuration
 max_results: 1000
 
-# Logging level
-log_level: "INFO"
+# Organization configuration (v0.2.0+)
+organize_by_date: true
+date_format: "YYYY/MM"  # Options: YYYY/MM, YYYY-MM, YYYY/MM/DD, YYYY-MM-DD
+create_index: true
 
-# Credentials and token paths
-credentials_path: "./credentials.json"
-token_path: "./token.json"
+# OAuth configuration
+credentials_path: "credentials.json"
+token_path: "token.json"
+
+# Logging
+verbose: false
 
 # Output file naming
 filename_template: "{subject}_{id}"
