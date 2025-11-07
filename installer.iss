@@ -3,8 +3,8 @@
 
 #define MyAppName "Gmail to NotebookLM"
 #define MyAppVersion "0.3.0"
-#define MyAppPublisher "Your Name"
-#define MyAppURL "https://github.com/yourusername/gmail-to-notebooklm"
+#define MyAppPublisher "Paul Deegan"
+#define MyAppURL "https://github.com/pgd1001/gmail-to-notebooklm"
 #define MyAppExeName "g2n-gui.exe"
 #define MyAppExeCLI "g2n.exe"
 

@@ -84,6 +84,9 @@ exports/
 !SETUP_WINDOWS.md
 !BUILD_INSTALLER.md
 !DISTRIBUTION.md
+!SIMPLIFIED_SETUP.md
+!BETA_ACCESS.md
+!ADVANCED_SETUP.md
 
 # PyInstaller build files
 build/

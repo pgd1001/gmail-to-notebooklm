@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Test",
+    "description": "",
+    "settings": {
+      "label": "",
+      "output_dir": "./output",
+      "organize_by_date": false,
+      "create_index": false
+    }
+  }
+]
