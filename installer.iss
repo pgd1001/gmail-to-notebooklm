@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6.0 or later: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Gmail to NotebookLM"
-#define MyAppVersion "0.3.0"
+#define MyAppVersion "0.4.0"
 #define MyAppPublisher "Paul Deegan"
 #define MyAppURL "https://github.com/pgd1001/gmail-to-notebooklm"
 #define MyAppExeName "g2n-gui.exe"
@@ -44,8 +44,11 @@ Source: "dist\{#MyAppExeCLI}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "QUICKSTART.md"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: AfterInstallProc
+Source: "SIMPLIFIED_SETUP.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "ADVANCED_SETUP.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "BETA_ACCESS.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "SETUP_WINDOWS.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "USAGE.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "OAUTH_SETUP.md"; DestDir: "{app}"; Flags: ignoreversion
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
