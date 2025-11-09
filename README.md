@@ -37,7 +37,7 @@ pip install -e .
 gmail-to-notebooklm --label "Client A" --output-dir "./output"
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for a complete 5-minute setup guide.
+See [docs/QUICKSTART.md](docs/QUICKSTART.md) for a complete 5-minute setup guide.
 
 ## Download
 
@@ -161,19 +161,23 @@ Files are named using the format: `[Sanitized_Subject]_[Email_ID].md`
 
 ## Documentation
 
-### User Guides
-- [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
-- [SIMPLIFIED_SETUP.md](SIMPLIFIED_SETUP.md) - For Windows .exe users (no Python needed)
-- [SETUP_WINDOWS.md](SETUP_WINDOWS.md) - Windows installation guide
-- [BETA_ACCESS.md](BETA_ACCESS.md) - Join the beta testing program
-- [ADVANCED_SETUP.md](ADVANCED_SETUP.md) - Create your own OAuth credentials
-- [USAGE.md](USAGE.md) - Comprehensive usage guide
-- [CONFIGURATION.md](CONFIGURATION.md) - Configuration options
+📚 **[Complete Documentation](docs/README.md)** - All guides and documentation in one place
 
-### Developer Guides
-- [DEVELOPMENT.md](DEVELOPMENT.md) - Developer guide
-- [BUILD_INSTALLER.md](BUILD_INSTALLER.md) - Building Windows executables and installer
-- [DISTRIBUTION.md](DISTRIBUTION.md) - Distribution and release guide
+### Quick Links
+
+**For End Users**:
+- [Simplified Setup Guide](docs/SIMPLIFIED_SETUP.md) - Download .exe and start using (no Python needed) ⭐
+- [Quick Start (5 min)](docs/QUICKSTART.md) - Fast setup for Python users
+- [Usage Guide](docs/USAGE.md) - All features and examples
+- [Beta Testing Program](docs/BETA_ACCESS.md) - Join the beta
+
+**For Developers**:
+- [Building with Embedded Credentials](docs/BUILDING_WITH_EMBEDDED_CREDENTIALS.md) - How to build for distribution ⭐
+- [Build Installer Guide](docs/BUILD_INSTALLER.md) - Creating Windows executables
+- [Development Guide](docs/DEVELOPMENT.md) - Contributing to the project
+- [Distribution Strategy](docs/DISTRIBUTION.md) - Release process
+
+**See [docs/README.md](docs/README.md) for complete documentation index**
 
 ## Project Structure
 

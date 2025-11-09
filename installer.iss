@@ -43,12 +43,7 @@ Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\{#MyAppExeCLI}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-Source: "QUICKSTART.md"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: AfterInstallProc
-Source: "SIMPLIFIED_SETUP.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "ADVANCED_SETUP.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "BETA_ACCESS.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "SETUP_WINDOWS.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "USAGE.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs; AfterInstall: AfterInstallProc
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
