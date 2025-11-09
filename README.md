@@ -71,7 +71,7 @@ pip install gmail-to-notebooklm
 3. Launch from Start Menu or desktop shortcut
 4. Run the Setup Wizard to configure OAuth
 
-See [SETUP_WINDOWS.md](SETUP_WINDOWS.md) for detailed Windows installation instructions.
+See [SETUP_WINDOWS.md](docs/SETUP_WINDOWS.md) for detailed Windows installation instructions.
 
 ### Python Installation
 
@@ -95,15 +95,15 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-For complete installation instructions, see [INSTALLATION.md](INSTALLATION.md).
+For complete installation instructions, see [INSTALLATION.md](docs/INSTALLATION.md).
 
 ### OAuth Setup
 
-**For most users**: If you downloaded the Windows .exe, OAuth credentials are already embedded. See [SIMPLIFIED_SETUP.md](SIMPLIFIED_SETUP.md).
+**For most users**: If you downloaded the Windows .exe, OAuth credentials are already embedded. See [SIMPLIFIED_SETUP.md](docs/SIMPLIFIED_SETUP.md).
 
 **For advanced users** who want to create their own credentials:
 
-1. Follow the step-by-step guide in [ADVANCED_SETUP.md](ADVANCED_SETUP.md)
+1. Follow the step-by-step guide in [ADVANCED_SETUP.md](docs/ADVANCED_SETUP.md)
 2. Download `credentials.json` from Google Cloud Console
 3. Place it in the project root directory
 
@@ -140,7 +140,7 @@ gmail-to-notebooklm --help
 gmail-to-notebooklm --version
 ```
 
-For comprehensive usage examples, see [USAGE.md](USAGE.md).
+For comprehensive usage examples, see [USAGE.md](docs/USAGE.md).
 
 ## Output Format
 
@@ -245,7 +245,7 @@ isort .
 flake8
 ```
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development instructions.
+See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development instructions.
 
 ## Limitations
 
@@ -272,11 +272,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-For more troubleshooting, see [INSTALLATION.md](INSTALLATION.md#troubleshooting).
+For more troubleshooting, see [INSTALLATION.md](docs/INSTALLATION.md#troubleshooting).
 
 ## Contributing
 
-Contributions are welcome! Please see [DEVELOPMENT.md](DEVELOPMENT.md) for guidelines.
+Contributions are welcome! Please see [DEVELOPMENT.md](docs/DEVELOPMENT.md) for guidelines.
 
 ## License
 
