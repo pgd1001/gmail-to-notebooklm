@@ -8,40 +8,27 @@ block_cipher = None
 
 # Collect all Google API client modules + GUI modules
 hiddenimports = [
-    'googleapiclient',
     'googleapiclient.discovery',
     'googleapiclient.http',
-    'google.auth',
-    'google.auth.transport',
     'google.auth.transport.requests',
-    'google_auth_oauthlib',
     'google_auth_oauthlib.flow',
     'google_auth_httplib2',
-    'httplib2',
-    'oauth2client',
     'click',
-    'rich',
     'rich.console',
     'rich.progress',
     'rich.table',
-    'beautifulsoup4',
     'bs4',
-    'lxml',
     'lxml.etree',
     'html2text',
     'yaml',
-    'dateutil',
     'dateutil.parser',
     'tkinter',
     'tkinter.ttk',
     'tkinter.simpledialog',
     'tkinter.messagebox',
     'tkinter.filedialog',
-    'gmail_to_notebooklm',
-    'gmail_to_notebooklm.gui',
     'gmail_to_notebooklm.gui.app',
     'gmail_to_notebooklm.gui.main',
-    'gmail_to_notebooklm.gui.windows',
     'gmail_to_notebooklm.gui.windows.main_window',
     'gmail_to_notebooklm.gui.windows.settings_dialog',
     'gmail_to_notebooklm.gui.windows.oauth_wizard',
@@ -56,8 +43,6 @@ hiddenimports = [
     'gmail_to_notebooklm.converter',
     'gmail_to_notebooklm.utils',
     'gmail_to_notebooklm.core',
-    'gmail_to_notebooklm.history',
-    'gmail_to_notebooklm.profiles',
 ]
 
 # Collect data files
@@ -74,11 +59,12 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['matplotlib', 'numpy', 'pandas', 'scipy'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=False,
+    noarchive=True,
+    optimize=2,  # Optimize Python bytecode (remove docstrings, line numbers, etc.)
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
@@ -93,9 +79,8 @@ exe = EXE(
     name='g2n-gui',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
+    strip=True,
+    upx=False,
     runtime_tmpdir=None,
     console=False,  # GUI should not show console window
     disable_windowed_traceback=False,
