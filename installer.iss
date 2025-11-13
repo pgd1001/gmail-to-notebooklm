@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6.0 or later: https://jrsoftware.org/isinfo.php
 
 #define MyAppName "Gmail to NotebookLM"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.7.0"
 #define MyAppPublisher "Paul Deegan"
 #define MyAppURL "https://github.com/pgd1001/gmail-to-notebooklm"
 #define MyAppExeName "g2n-gui.exe"
