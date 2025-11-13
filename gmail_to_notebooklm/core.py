@@ -393,8 +393,6 @@ class ExportEngine:
 
                     # Write consolidated file
                     try:
-                        from pathlib import Path
-
                         output_dir.mkdir(parents=True, exist_ok=True)
                         file_path = output_dir / consolidation_filename
                         file_path.write_text(consolidated_content, encoding="utf-8")
