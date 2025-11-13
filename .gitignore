@@ -87,6 +87,12 @@ exports/
 !SIMPLIFIED_SETUP.md
 !BETA_ACCESS.md
 !ADVANCED_SETUP.md
+!ROADMAP.md
+!PRIVACY_POLICY.md
+!GETTING_HELP.md
+!TROUBLESHOOTING.md
+!FEATURES_GUIDE.md
+!ADMIN_SETUP.md
 
 # PyInstaller build files
 build/
