@@ -24,6 +24,7 @@ from gmail_to_notebooklm.utils import (
     generate_index_file,
     get_date_subdirectory,
     write_markdown_file,
+    group_emails_by,
 )
 
 # Optional history tracking
@@ -177,6 +178,9 @@ class ExportEngine:
                 - date_format: Date format for subdirectories
                 - create_index: Generate INDEX.md
                 - overwrite: Overwrite existing files
+                - consolidate: If True, create single consolidated file (default: False)
+                - consolidation_mode: How to group emails ("all", "thread", "date", "sender", "recipient")
+                - consolidation_filename: Output filename for consolidated document (default: "export.md")
             dry_run: If True, simulate export without creating files
             resume_file: Path to resume state file (not yet implemented)
 
@@ -349,6 +353,9 @@ class ExportEngine:
             if self._cancelled:
                 return self._create_cancelled_result(output_dir)
 
+            # Check if consolidation mode is enabled
+            consolidate = settings.get("consolidate", False)
+
             # Save files (if not dry run)
             if dry_run:
                 return ExportResult(
@@ -364,46 +371,87 @@ class ExportEngine:
                     },
                 )
 
-            # Save files
+            # Save files based on mode
             saved_count = 0
             filenames: Dict[str, str] = {}
-            organize_by_date = settings.get("organize_by_date", False)
-            date_format = settings.get("date_format", "YYYY/MM")
-            overwrite = settings.get("overwrite", False)
 
-            for email_id, markdown_content in converted:
-                if self._cancelled:
-                    break
-
-                # Find original email data
-                original = next((e for e in parsed_emails if e["id"] == email_id), None)
-                if not original:
-                    continue
-
-                # Create filename
-                subject = original.get("subject", "No Subject")
-                filename = create_filename(subject, email_id)
-
-                # Determine output directory
-                if organize_by_date and original:
-                    date_subdir = get_date_subdirectory(original, date_format)
-                    target_dir = output_dir / date_subdir
-                    relative_path = f"{date_subdir}/{filename}"
-                else:
-                    target_dir = output_dir
-                    relative_path = filename
-
-                # Write file
+            if consolidate:
+                # Consolidation mode: create single file with all emails
+                self._report_status("Creating consolidated email document...")
                 try:
-                    write_markdown_file(
-                        target_dir, filename, markdown_content, overwrite=overwrite
+                    consolidation_mode = settings.get("consolidation_mode", "all")
+                    consolidation_title = settings.get("consolidation_title", "Email Export")
+                    consolidation_filename = settings.get("consolidation_filename", "export.md")
+
+                    # Create consolidated document
+                    consolidated_content = converter.convert_consolidated(
+                        parsed_emails,
+                        title=consolidation_title,
+                        include_toc=True,
+                        progress_callback=convert_progress,
                     )
-                    filenames[email_id] = relative_path
-                    saved_count += 1
+
+                    # Write consolidated file
+                    try:
+                        from pathlib import Path
+
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        file_path = output_dir / consolidation_filename
+                        file_path.write_text(consolidated_content, encoding="utf-8")
+                        saved_count = 1
+                        filenames["consolidated"] = consolidation_filename
+                        self._report_status(
+                            f"Created consolidated document: {consolidation_filename}"
+                        )
+                    except Exception as e:
+                        error_msg = f"Failed to write consolidated file: {e}"
+                        errors.append(error_msg)
+                        self._report_status(f"Error: {error_msg}")
+
                 except Exception as e:
-                    error_msg = f"Failed to write {filename}: {e}"
+                    error_msg = f"Failed to create consolidated document: {e}"
                     errors.append(error_msg)
-                    self._report_status(f"Warning: {error_msg}")
+                    self._report_status(f"Error: {error_msg}")
+
+            else:
+                # Individual files mode: create separate file for each email
+                organize_by_date = settings.get("organize_by_date", False)
+                date_format = settings.get("date_format", "YYYY/MM")
+                overwrite = settings.get("overwrite", False)
+
+                for email_id, markdown_content in converted:
+                    if self._cancelled:
+                        break
+
+                    # Find original email data
+                    original = next((e for e in parsed_emails if e["id"] == email_id), None)
+                    if not original:
+                        continue
+
+                    # Create filename
+                    subject = original.get("subject", "No Subject")
+                    filename = create_filename(subject, email_id)
+
+                    # Determine output directory
+                    if organize_by_date and original:
+                        date_subdir = get_date_subdirectory(original, date_format)
+                        target_dir = output_dir / date_subdir
+                        relative_path = f"{date_subdir}/{filename}"
+                    else:
+                        target_dir = output_dir
+                        relative_path = filename
+
+                    # Write file
+                    try:
+                        write_markdown_file(
+                            target_dir, filename, markdown_content, overwrite=overwrite
+                        )
+                        filenames[email_id] = relative_path
+                        saved_count += 1
+                    except Exception as e:
+                        error_msg = f"Failed to write {filename}: {e}"
+                        errors.append(error_msg)
+                        self._report_status(f"Warning: {error_msg}")
 
             # Generate index if requested
             if settings.get("create_index", False) and saved_count > 0:
@@ -426,7 +474,10 @@ class ExportEngine:
                 "emails_converted": len(converted),
                 "files_saved": saved_count,
                 "errors": len(errors),
+                "consolidation_mode": consolidate,
             }
+            if consolidate:
+                stats["consolidation_filename"] = settings.get("consolidation_filename", "export.md")
 
             result = ExportResult(
                 success=saved_count > 0 and not self._cancelled,

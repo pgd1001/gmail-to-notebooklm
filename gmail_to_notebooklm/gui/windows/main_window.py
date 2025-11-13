@@ -81,7 +81,15 @@ class MainWindow(ttk.Frame):
             text="History",
             command=self._show_history
         )
-        history_button.pack(side=tk.LEFT)
+        history_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        # Help menu (right-aligned)
+        help_button = ttk.Button(
+            menu_frame,
+            text="Help",
+            command=self._show_help_menu
+        )
+        help_button.pack(side=tk.RIGHT)
 
         # Title
         title = ttk.Label(
@@ -224,6 +232,32 @@ class MainWindow(ttk.Frame):
         )
         overwrite_check.pack(side=tk.LEFT)
 
+        # Consolidation options
+        consolidation_frame = ttk.Frame(output_frame)
+        consolidation_frame.pack(fill=tk.X, pady=(10, 0))
+
+        self.consolidate_var = tk.BooleanVar(value=False)
+        consolidate_check = ttk.Checkbutton(
+            consolidation_frame,
+            text="Create single consolidated file",
+            variable=self.consolidate_var,
+            command=self._toggle_consolidation_options
+        )
+        consolidate_check.pack(side=tk.LEFT, padx=(0, 20))
+
+        # Consolidation mode dropdown
+        ttk.Label(consolidation_frame, text="Grouping:").pack(side=tk.LEFT, padx=(0, 5))
+        self.consolidation_mode_var = tk.StringVar(value="all")
+        consolidation_combo = ttk.Combobox(
+            consolidation_frame,
+            textvariable=self.consolidation_mode_var,
+            values=["all", "thread", "date", "sender", "recipient"],
+            state="readonly",
+            width=12
+        )
+        consolidation_combo.pack(side=tk.LEFT)
+        self._consolidation_widgets = [consolidate_check, consolidation_combo]
+
         # Export button
         self.export_button = ttk.Button(
             bottom_panel,
@@ -350,6 +384,12 @@ class MainWindow(ttk.Frame):
         if directory:
             self.output_dir_var.set(directory)
 
+    def _toggle_consolidation_options(self):
+        """Enable/disable consolidation mode options."""
+        # This will be called when consolidation checkbox changes
+        # The grouping dropdown should be enabled only when consolidation is checked
+        pass
+
     def _validate_settings(self) -> tuple[bool, str]:
         """Validate export settings.
 
@@ -393,6 +433,10 @@ class MainWindow(ttk.Frame):
             "organize_by_date": self.organize_by_date_var.get(),
             "create_index": self.create_index_var.get(),
             "overwrite": self.overwrite_var.get(),
+            "consolidate": self.consolidate_var.get(),
+            "consolidation_mode": self.consolidation_mode_var.get(),
+            "consolidation_filename": "export.md",
+            "consolidation_title": "Email Export",
         }
 
         # Add optional filters
@@ -494,3 +538,124 @@ class MainWindow(ttk.Frame):
 
         if settings.get("to"):
             self.to_var.set(settings["to"])
+
+    def _show_help_menu(self):
+        """Show help menu with documentation options."""
+        # Create a popup menu
+        help_menu = tk.Menu(self.parent, tearoff=0)
+
+        help_menu.add_command(
+            label="Getting Help & Documentation",
+            command=lambda: self._show_help_dialog(
+                "Getting Help",
+                "For comprehensive help and documentation, visit:\n\n"
+                "GitHub Docs: github.com/yourusername/gmail-to-notebooklm/tree/main/docs\n\n"
+                "Key Resources:\n"
+                "• GETTING_HELP.md - Navigation guide\n"
+                "• FEATURES_GUIDE.md - All features explained\n"
+                "• TROUBLESHOOTING.md - Common issues\n"
+                "• ADMIN_SETUP.md - Creating credentials\n"
+                "• PRIVACY_POLICY.md - Data handling\n\n"
+                "Or use the command line:\n"
+                "g2n --help-setup"
+            )
+        )
+
+        help_menu.add_command(
+            label="Features & Settings Guide",
+            command=lambda: self._show_help_dialog(
+                "Features Guide",
+                "Learn about all features:\n\n"
+                "• Email filtering (date, sender, advanced queries)\n"
+                "• Output organization (by date, index files)\n"
+                "• Profiles (save and reuse settings)\n"
+                "• Export history (track past exports)\n"
+                "• Settings & configuration\n\n"
+                "See FEATURES_GUIDE.md for detailed examples"
+            )
+        )
+
+        help_menu.add_command(
+            label="Setup & Credentials",
+            command=lambda: self._show_help_dialog(
+                "Setup Options",
+                "Three ways to set up credentials:\n\n"
+                "1. Use Windows .exe (has embedded credentials)\n"
+                "   • Download from GitHub releases\n"
+                "   • No setup needed!\n\n"
+                "2. Create your own credentials\n"
+                "   • See ADMIN_SETUP.md\n"
+                "   • Takes 5-10 minutes\n\n"
+                "3. Advanced setup\n"
+                "   • See ADVANCED_SETUP.md\n"
+                "   • For developers building from source"
+            )
+        )
+
+        help_menu.add_separator()
+
+        help_menu.add_command(
+            label="Privacy & Security",
+            command=lambda: self._show_help_dialog(
+                "Privacy & Security",
+                "Privacy First Design:\n\n"
+                "✓ All data stored locally on your computer\n"
+                "✓ Emails never uploaded to servers\n"
+                "✓ Read-only Gmail access (can't delete/modify)\n"
+                "✓ No tracking or analytics\n"
+                "✓ Open source and auditable\n\n"
+                "See PRIVACY_POLICY.md for full details"
+            )
+        )
+
+        help_menu.add_command(
+            label="Troubleshooting",
+            command=lambda: self._show_help_dialog(
+                "Troubleshooting",
+                "Having issues? Common solutions:\n\n"
+                "Authentication:\n"
+                "• Re-run Setup Wizard\n"
+                "• Check Settings > Credentials\n\n"
+                "Exports:\n"
+                "• Try smaller export (--max-results 10)\n"
+                "• Use dry-run to test filters\n\n"
+                "General:\n"
+                "• Check TROUBLESHOOTING.md\n"
+                "• Open issue on GitHub\n\n"
+                "Run with --verbose for detailed output"
+            )
+        )
+
+        help_menu.add_separator()
+
+        help_menu.add_command(
+            label="About Gmail to NotebookLM",
+            command=self._show_about_dialog
+        )
+
+        # Show menu at mouse position
+        help_menu.post(self.parent.winfo_pointerx(), self.parent.winfo_pointery())
+
+    def _show_help_dialog(self, title: str, message: str):
+        """Show a help information dialog.
+
+        Args:
+            title: Dialog title
+            message: Help message to display
+        """
+        messagebox.showinfo(title, message)
+
+    def _show_about_dialog(self):
+        """Show about dialog with version and links."""
+        from gmail_to_notebooklm import __version__
+
+        about_text = (
+            f"Gmail to NotebookLM v{__version__}\n\n"
+            "Convert Gmail emails to Markdown for NotebookLM\n\n"
+            "• Open Source: github.com/yourusername/gmail-to-notebooklm\n"
+            "• Report Issues: github.com/yourusername/gmail-to-notebooklm/issues\n"
+            "• Documentation: See Help menu above\n\n"
+            "Made with ❤️ for email management"
+        )
+
+        messagebox.showinfo("About Gmail to NotebookLM", about_text)

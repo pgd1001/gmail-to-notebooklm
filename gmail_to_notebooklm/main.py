@@ -135,6 +135,27 @@ EXIT_USER_CANCEL = 130
     help="Date format for organization (default: YYYY/MM)",
 )
 @click.option(
+    "--consolidate",
+    is_flag=True,
+    help="Create single consolidated Markdown file instead of individual files",
+)
+@click.option(
+    "--consolidation-filename",
+    default="export.md",
+    help="Filename for consolidated document (default: export.md)",
+)
+@click.option(
+    "--consolidation-title",
+    default=None,
+    help="Title for consolidated document (default: 'Email Export')",
+)
+@click.option(
+    "--consolidation-mode",
+    default="all",
+    type=click.Choice(["all", "thread", "date", "sender", "recipient"], case_sensitive=False),
+    help="Grouping strategy for consolidation (default: all)",
+)
+@click.option(
     "--dry-run",
     is_flag=True,
     help="Validate settings and show what would be exported without actually exporting",
@@ -173,6 +194,10 @@ def cli(
     create_index: bool,
     organize_by_date: bool,
     date_format: str,
+    consolidate: bool,
+    consolidation_filename: str,
+    consolidation_title: Optional[str],
+    consolidation_mode: str,
     dry_run: bool,
     quiet: bool,
     json_output: bool,
@@ -228,6 +253,10 @@ def cli(
             "create_index": create_index,
             "organize_by_date": organize_by_date,
             "date_format": date_format,
+            "consolidate": consolidate,
+            "consolidation_filename": consolidation_filename,
+            "consolidation_title": consolidation_title,
+            "consolidation_mode": consolidation_mode,
         }
         settings = cfg.merge_with_cli_args(cli_args)
 
@@ -269,6 +298,12 @@ def cli(
         # Determine output directory with fallback
         if settings.get("output_dir") is None:
             settings["output_dir"] = get_env_or_default("GMAIL_TO_NBL_OUTPUT_DIR", "./output")
+
+        # Set default consolidation title if not provided
+        if consolidate and not consolidation_title:
+            settings["consolidation_title"] = "Email Export"
+        elif consolidate and consolidation_title:
+            settings["consolidation_title"] = consolidation_title
 
         # Validate required fields
         if not settings.get("label") and not settings.get("query") and not after and not before and not from_ and not to:
@@ -363,16 +398,26 @@ def cli(
                     else:
                         log("✓ Export completed successfully!")
                         log("=" * 50)
-                        log(f"Emails exported: {result.files_created}")
+
+                        # Show consolidation or individual file info
+                        if result.stats.get("consolidation_mode"):
+                            consolidated_file = result.stats.get("consolidation_filename", "export.md")
+                            log(f"Consolidated document created: {consolidated_file}")
+                        else:
+                            log(f"Files created: {result.files_created}")
+
                         log(f"Output directory: {result.output_dir.absolute()}")
 
                         if result.errors:
                             log(f"\n⚠️  Warnings: {len(result.errors)} files had errors")
 
                         log("\nNext steps:")
-                        log("1. Review the Markdown files in the output directory")
+                        log("1. Review the exported file(s) in the output directory")
                         log("2. Go to https://notebooklm.google.com/")
-                        log("3. Create a notebook and upload these files as sources")
+                        if result.stats.get("consolidation_mode"):
+                            log("3. Create a notebook and upload the consolidated Markdown file as a source")
+                        else:
+                            log("3. Create a notebook and upload these Markdown files as sources")
                 else:
                     log("✗ Export failed")
                     log("=" * 50)
@@ -403,7 +448,10 @@ def cli(
             print(json.dumps({"error": str(e), "exit_code": EXIT_AUTH_ERROR}))
         else:
             log(f"\n✗ Authentication failed: {e}", err=True)
-            log("\nSee OAUTH_SETUP.md for setup instructions.", err=True)
+            log("\nFor help with setup, see:", err=True)
+            log("  • GETTING_HELP.md - Documentation guide", err=True)
+            log("  • ADMIN_SETUP.md - Create your own credentials", err=True)
+            log("  • Run: g2n --help-setup", err=True)
         sys.exit(EXIT_AUTH_ERROR)
 
     except GmailAPIError as e:

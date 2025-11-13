@@ -4,7 +4,7 @@ Convert Gmail emails from a specific label into Markdown files formatted
 for Google NotebookLM.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Gmail to NotebookLM Contributors"
 __license__ = "MIT"
 

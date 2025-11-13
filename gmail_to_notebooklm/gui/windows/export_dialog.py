@@ -238,11 +238,19 @@ class ExportDialog(tk.Toplevel):
             self.percentage_label.config(text="100%")
 
             # Show summary
-            summary = (
-                f"Created {result.files_created} files\n"
-                f"Output directory: {result.output_dir}\n"
-                f"Duration: {result.duration_seconds:.1f} seconds"
-            )
+            if result.stats.get("consolidation_mode"):
+                summary = (
+                    f"Created consolidated document\n"
+                    f"Filename: {result.stats.get('consolidation_filename', 'export.md')}\n"
+                    f"Output directory: {result.output_dir}\n"
+                    f"Duration: {result.duration_seconds:.1f} seconds"
+                )
+            else:
+                summary = (
+                    f"Created {result.files_created} files\n"
+                    f"Output directory: {result.output_dir}\n"
+                    f"Duration: {result.duration_seconds:.1f} seconds"
+                )
 
             if result.errors:
                 summary += f"\n\nWarnings: {len(result.errors)} files had errors"

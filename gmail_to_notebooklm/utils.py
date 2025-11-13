@@ -495,3 +495,125 @@ def get_date_subdirectory(email_data: dict, date_format: str = "YYYY/MM") -> str
     except (ValueError, TypeError, AttributeError):
         # If date parsing fails, use "Unknown" subdirectory
         return "Unknown"
+
+
+def generate_anchor_id(
+    email_data: dict,
+    id_length: int = 16,
+    include_subject: bool = True,
+) -> str:
+    """
+    Generate a unique anchor ID for an email in consolidated documents.
+
+    Creates NotebookLM-compatible anchor IDs using email metadata.
+
+    Args:
+        email_data: Parsed email data dictionary
+        id_length: Length of Gmail ID to use (default: 16, max: 64)
+        include_subject: Include sanitized subject in anchor (default: True)
+
+    Returns:
+        Anchor ID string suitable for HTML/Markdown anchors (alphanumeric + hyphens)
+
+    Example:
+        >>> email = {"subject": "Project Update", "id": "abc123def456xyz"}
+        >>> generate_anchor_id(email)
+        'project-update-abc123def456xy'
+        >>> generate_anchor_id(email, include_subject=False)
+        'email-abc123def456xy'
+    """
+    # Get full Gmail ID
+    email_id = email_data.get("id", "unknown")
+
+    # Use specified length (capped at actual ID length)
+    short_id = email_id[:min(id_length, len(email_id))]
+
+    if include_subject:
+        # Sanitize subject for anchor
+        subject = email_data.get("subject", "untitled")
+        subject_slug = sanitize_filename(subject, max_length=40)
+
+        # Build anchor with subject and ID
+        anchor = f"{subject_slug}-{short_id}".lower()
+    else:
+        # Build anchor with just ID
+        anchor = f"email-{short_id}".lower()
+
+    # Ensure only alphanumeric and hyphens
+    anchor = re.sub(r"[^a-z0-9-]", "", anchor)
+
+    # Remove leading/trailing hyphens
+    anchor = anchor.strip("-")
+
+    # Ensure not empty
+    if not anchor:
+        anchor = f"email-{email_id[:8]}"
+
+    return anchor
+
+
+def group_emails_by(
+    emails: list[dict],
+    group_by: str = "all",
+) -> dict[str, list[dict]]:
+    """
+    Group emails by specified criteria.
+
+    Organizes emails for consolidated export.
+
+    Args:
+        emails: List of parsed email data dictionaries
+        group_by: Grouping strategy:
+            - "all": Single group (consolidate all)
+            - "thread": Group by thread_id (conversations)
+            - "date": Group by date (YYYY-MM)
+            - "sender": Group by "from" address
+            - "recipient": Group by "to" address
+
+    Returns:
+        Dictionary mapping group key to list of emails
+
+    Example:
+        >>> emails = [
+        ...     {"id": "1", "thread_id": "t1", "from": "a@x.com", "date": "2024-01-15"},
+        ...     {"id": "2", "thread_id": "t1", "from": "a@x.com", "date": "2024-01-15"},
+        ... ]
+        >>> groups = group_emails_by(emails, "thread")
+        >>> len(groups["t1"])
+        2
+    """
+    groups: dict[str, list[dict]] = {}
+
+    for email in emails:
+        if group_by == "all":
+            key = "all"
+        elif group_by == "thread":
+            key = email.get("thread_id", "unknown_thread")
+        elif group_by == "date":
+            # Extract YYYY-MM from date
+            try:
+                date_obj = parsedate_to_datetime(email.get("date", ""))
+                key = f"{date_obj.year}-{date_obj.month:02d}"
+            except (ValueError, TypeError, AttributeError):
+                key = "unknown_date"
+        elif group_by == "sender":
+            # Extract email address from "From" field
+            from_str = email.get("from", "unknown")
+            # Try to extract email address from "Name <email@domain>" format
+            match = re.search(r"<(.+?)>", from_str)
+            key = match.group(1) if match else from_str
+        elif group_by == "recipient":
+            # Extract email address from "To" field
+            to_str = email.get("to", "unknown")
+            # Try to extract email address from "Name <email@domain>" format
+            match = re.search(r"<(.+?)>", to_str)
+            key = match.group(1) if match else to_str
+        else:
+            # Default to grouping by thread if unknown strategy
+            key = email.get("thread_id", "unknown_thread")
+
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(email)
+
+    return groups
