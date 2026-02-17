@@ -7,6 +7,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
+from .rate_limiter import get_rate_limiter, get_label_cache, with_retry, RateLimitError
+from .audit import get_audit_logger
+from .validation import GmailValidator, ValidationError
+
 
 class GmailAPIError(Exception):
     """Raised when Gmail API operations fail."""
@@ -20,12 +24,13 @@ class GmailClient:
     Provides methods to list and fetch emails from Gmail labels.
     """
 
-    def __init__(self, credentials: Credentials):
+    def __init__(self, credentials: Credentials, enable_rate_limiting: bool = True):
         """
         Initialize Gmail API client.
 
         Args:
             credentials: Authenticated Google API credentials
+            enable_rate_limiting: Whether to enable rate limiting (default: True)
 
         Raises:
             GmailAPIError: If client initialization fails
@@ -33,6 +38,9 @@ class GmailClient:
         try:
             self.service = build("gmail", "v1", credentials=credentials)
             self.user_id = "me"
+            self.rate_limiter = get_rate_limiter(enabled=enable_rate_limiting)
+            self.label_cache = get_label_cache()
+            self.audit_logger = get_audit_logger()
         except Exception as e:
             raise GmailAPIError(f"Failed to initialize Gmail client: {e}")
 
@@ -48,10 +56,34 @@ class GmailClient:
 
         Raises:
             GmailAPIError: If API call fails
+            ValidationError: If label name is invalid
         """
+        # Validate label name
         try:
+            label_name = GmailValidator.validate_label(label_name)
+        except ValidationError as e:
+            if self.audit_logger:
+                self.audit_logger.log_validation_error('gmail_label', label_name, str(e))
+            raise GmailAPIError(f"Invalid label name: {e}")
+        
+        try:
+            # Check cache first
+            cached_labels = self.label_cache.get_labels()
+            if cached_labels:
+                for label in cached_labels:
+                    if label["name"] == label_name:
+                        return label["id"]
+                return None
+            
+            # Rate limit before API call
+            if self.rate_limiter:
+                self.rate_limiter.wait_if_needed("labels.list")
+            
             results = self.service.users().labels().list(userId=self.user_id).execute()
             labels = results.get("labels", [])
+            
+            # Cache the labels
+            self.label_cache.set_labels(labels)
 
             for label in labels:
                 if label["name"] == label_name:
@@ -59,7 +91,19 @@ class GmailClient:
 
             return None
         except HttpError as e:
-            raise GmailAPIError(f"Failed to fetch labels: {e}")
+            error_msg = f"Failed to fetch labels: {e}"
+            if self.audit_logger:
+                self.audit_logger.log_api_error("labels.list", getattr(e, 'resp', {}).get('status'), str(e))
+            
+            # Handle rate limiting
+            if hasattr(e, 'resp') and e.resp.status == 429:
+                if self.rate_limiter:
+                    retry_after = e.resp.get('retry-after')
+                    self.rate_limiter.handle_rate_limit_error("labels.list", retry_after)
+                if self.audit_logger:
+                    self.audit_logger.log_rate_limit_hit("labels.list", retry_after)
+            
+            raise GmailAPIError(error_msg)
 
     def list_messages(
         self,
@@ -80,10 +124,20 @@ class GmailClient:
 
         Raises:
             GmailAPIError: If API call fails, label not found, or neither label nor query provided
+            ValidationError: If query is invalid
         """
         # Validate inputs
         if not label_name and not query:
             raise GmailAPIError("Either label_name or query must be provided")
+        
+        # Validate query if provided
+        if query:
+            try:
+                query = GmailValidator.validate_query(query)
+            except ValidationError as e:
+                if self.audit_logger:
+                    self.audit_logger.log_validation_error('gmail_query', query, str(e))
+                raise GmailAPIError(f"Invalid query: {e}")
 
         # Get label ID if label specified
         label_id = None
@@ -102,6 +156,10 @@ class GmailClient:
 
         try:
             while True:
+                # Rate limit before API call
+                if self.rate_limiter:
+                    self.rate_limiter.wait_if_needed("messages.list")
+                
                 # Build request parameters
                 params = {
                     "userId": self.user_id,
@@ -145,7 +203,19 @@ class GmailClient:
             return message_ids[: max_results] if max_results else message_ids
 
         except HttpError as e:
-            raise GmailAPIError(f"Failed to list messages: {e}")
+            error_msg = f"Failed to list messages: {e}"
+            if self.audit_logger:
+                self.audit_logger.log_api_error("messages.list", getattr(e, 'resp', {}).get('status'), str(e))
+            
+            # Handle rate limiting
+            if hasattr(e, 'resp') and e.resp.status == 429:
+                if self.rate_limiter:
+                    retry_after = e.resp.get('retry-after')
+                    self.rate_limiter.handle_rate_limit_error("messages.list", retry_after)
+                if self.audit_logger:
+                    self.audit_logger.log_rate_limit_hit("messages.list", retry_after)
+            
+            raise GmailAPIError(error_msg)
 
     def get_message(self, message_id: str) -> Dict:
         """
@@ -166,6 +236,10 @@ class GmailClient:
             GmailAPIError: If API call fails
         """
         try:
+            # Rate limit before API call
+            if self.rate_limiter:
+                self.rate_limiter.wait_if_needed("messages.get")
+            
             message = (
                 self.service.users()
                 .messages()
@@ -174,7 +248,19 @@ class GmailClient:
             )
             return message
         except HttpError as e:
-            raise GmailAPIError(f"Failed to fetch message {message_id}: {e}")
+            error_msg = f"Failed to fetch message {message_id}: {e}"
+            if self.audit_logger:
+                self.audit_logger.log_api_error("messages.get", getattr(e, 'resp', {}).get('status'), str(e))
+            
+            # Handle rate limiting
+            if hasattr(e, 'resp') and e.resp.status == 429:
+                if self.rate_limiter:
+                    retry_after = e.resp.get('retry-after')
+                    self.rate_limiter.handle_rate_limit_error("messages.get", retry_after)
+                if self.audit_logger:
+                    self.audit_logger.log_rate_limit_hit("messages.get", retry_after)
+            
+            raise GmailAPIError(error_msg)
 
     def list_labels(self) -> List[str]:
         """
@@ -187,11 +273,36 @@ class GmailClient:
             GmailAPIError: If API call fails
         """
         try:
+            # Check cache first
+            cached_labels = self.label_cache.get_labels()
+            if cached_labels:
+                return [label["name"] for label in cached_labels]
+            
+            # Rate limit before API call
+            if self.rate_limiter:
+                self.rate_limiter.wait_if_needed("labels.list")
+            
             results = self.service.users().labels().list(userId=self.user_id).execute()
             labels = results.get("labels", [])
+            
+            # Cache the labels
+            self.label_cache.set_labels(labels)
+            
             return [label["name"] for label in labels]
         except HttpError as e:
-            raise GmailAPIError(f"Failed to list labels: {e}")
+            error_msg = f"Failed to list labels: {e}"
+            if self.audit_logger:
+                self.audit_logger.log_api_error("labels.list", getattr(e, 'resp', {}).get('status'), str(e))
+            
+            # Handle rate limiting
+            if hasattr(e, 'resp') and e.resp.status == 429:
+                if self.rate_limiter:
+                    retry_after = e.resp.get('retry-after')
+                    self.rate_limiter.handle_rate_limit_error("labels.list", retry_after)
+                if self.audit_logger:
+                    self.audit_logger.log_rate_limit_hit("labels.list", retry_after)
+            
+            raise GmailAPIError(error_msg)
 
     def get_messages_batch(
         self,

@@ -6,9 +6,16 @@ from typing import Callable, Dict, List, Optional
 
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
+from .audit import get_audit_logger
+
 
 class EmailParseError(Exception):
     """Raised when email parsing fails."""
+    pass
+
+
+class EmailSizeExceededError(EmailParseError):
+    """Raised when email size exceeds limit."""
     pass
 
 
@@ -18,6 +25,16 @@ class EmailParser:
 
     Extracts headers, body content, and metadata from Gmail messages.
     """
+    
+    def __init__(self, max_email_size_mb: int = 50):
+        """
+        Initialize email parser.
+        
+        Args:
+            max_email_size_mb: Maximum email size in MB (default: 50MB)
+        """
+        self.max_email_size_bytes = max_email_size_mb * 1024 * 1024
+        self.audit_logger = get_audit_logger()
 
     @staticmethod
     def get_header(headers: List[Dict], name: str) -> Optional[str]:
@@ -58,8 +75,24 @@ class EmailParser:
 
         Raises:
             EmailParseError: If parsing fails
+            EmailSizeExceededError: If email size exceeds limit
         """
         try:
+            # Check email size first
+            size_estimate = message.get("sizeEstimate", 0)
+            if size_estimate > self.max_email_size_bytes:
+                error_msg = (
+                    f"Email size ({size_estimate / 1024 / 1024:.2f} MB) exceeds "
+                    f"limit ({self.max_email_size_bytes / 1024 / 1024:.0f} MB)"
+                )
+                if self.audit_logger:
+                    self.audit_logger.log_validation_error(
+                        'email_size',
+                        message.get('id', 'unknown'),
+                        error_msg
+                    )
+                raise EmailSizeExceededError(error_msg)
+            
             payload = message.get("payload", {})
             headers = payload.get("headers", [])
 
@@ -72,6 +105,7 @@ class EmailParser:
                 "cc": self.get_header(headers, "Cc"),
                 "subject": self.get_header(headers, "Subject") or "(No Subject)",
                 "date": self.get_header(headers, "Date"),
+                "size_bytes": size_estimate,
             }
 
             # Parse date to ISO format
@@ -86,13 +120,43 @@ class EmailParser:
 
             # Extract body content
             body_html, body_text = self._extract_body(payload)
+            
+            # Check body size after extraction
+            body_size = 0
+            if body_html:
+                body_size += len(body_html.encode('utf-8'))
+            if body_text:
+                body_size += len(body_text.encode('utf-8'))
+            
+            if body_size > self.max_email_size_bytes:
+                error_msg = (
+                    f"Email body size ({body_size / 1024 / 1024:.2f} MB) exceeds "
+                    f"limit ({self.max_email_size_bytes / 1024 / 1024:.0f} MB)"
+                )
+                if self.audit_logger:
+                    self.audit_logger.log_validation_error(
+                        'email_body_size',
+                        message.get('id', 'unknown'),
+                        error_msg
+                    )
+                raise EmailSizeExceededError(error_msg)
+            
             parsed["body_html"] = body_html
             parsed["body_text"] = body_text
 
             return parsed
 
+        except EmailSizeExceededError:
+            raise
         except Exception as e:
-            raise EmailParseError(f"Failed to parse message: {e}")
+            error_msg = f"Failed to parse message: {e}"
+            if self.audit_logger:
+                self.audit_logger.log_validation_error(
+                    'email_parse',
+                    message.get('id', 'unknown'),
+                    error_msg
+                )
+            raise EmailParseError(error_msg)
 
     def _extract_body(self, payload: Dict) -> tuple[Optional[str], Optional[str]]:
         """
@@ -185,6 +249,7 @@ class EmailParser:
         self,
         messages: List[Dict],
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        skip_oversized: bool = True,
     ) -> List[Dict]:
         """
         Parse multiple messages.
@@ -192,14 +257,16 @@ class EmailParser:
         Args:
             messages: List of raw Gmail API messages
             progress_callback: Optional callback for progress updates (current, total)
+            skip_oversized: Whether to skip oversized emails (default: True)
 
         Returns:
             List of parsed message dictionaries
 
         Raises:
-            EmailParseError: If parsing fails for any message
+            EmailParseError: If parsing fails for any message (and skip_oversized=False)
         """
         parsed_messages = []
+        skipped_count = 0
 
         # Use callback if provided, otherwise use Rich progress bar
         if progress_callback:
@@ -207,6 +274,12 @@ class EmailParser:
                 try:
                     parsed = self.parse_message(message)
                     parsed_messages.append(parsed)
+                except EmailSizeExceededError as e:
+                    if skip_oversized:
+                        skipped_count += 1
+                        continue
+                    else:
+                        raise
                 except EmailParseError as e:
                     # Note: Warnings are swallowed when using callback
                     continue
@@ -226,6 +299,15 @@ class EmailParser:
                     try:
                         parsed = self.parse_message(message)
                         parsed_messages.append(parsed)
+                    except EmailSizeExceededError as e:
+                        if skip_oversized:
+                            skipped_count += 1
+                            progress.console.print(
+                                f"[yellow]Warning: Skipping oversized email {message.get('id')}: {e}[/yellow]"
+                            )
+                            continue
+                        else:
+                            raise
                     except EmailParseError as e:
                         progress.console.print(
                             f"[yellow]Warning: Failed to parse message {message.get('id')}: {e}[/yellow]"
@@ -233,5 +315,10 @@ class EmailParser:
                         continue
                     finally:
                         progress.update(task, advance=1)
+                
+                if skipped_count > 0:
+                    progress.console.print(
+                        f"[yellow]Skipped {skipped_count} oversized email(s)[/yellow]"
+                    )
 
         return parsed_messages

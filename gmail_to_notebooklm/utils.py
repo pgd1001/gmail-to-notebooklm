@@ -6,6 +6,9 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
+from .validation import PathValidator, ValidationError
+from .audit import get_audit_logger
+
 
 def sanitize_filename(text: str, max_length: int = 200) -> str:
     """
@@ -24,26 +27,8 @@ def sanitize_filename(text: str, max_length: int = 200) -> str:
         >>> sanitize_filename("Project: Update (Q4)")
         'Project_Update_Q4'
     """
-    # Remove or replace invalid characters
-    # Invalid: / \\ : * ? " < > |
-    text = re.sub(r'[/<>:"|?*\\]', "", text)
-
-    # Replace spaces and multiple underscores with single underscore
-    text = re.sub(r"\s+", "_", text)
-    text = re.sub(r"_+", "_", text)
-
-    # Remove leading/trailing underscores and dots
-    text = text.strip("_.")
-
-    # Truncate to max length
-    if len(text) > max_length:
-        text = text[:max_length].rstrip("_.")
-
-    # Ensure not empty
-    if not text:
-        text = "untitled"
-
-    return text
+    # Use PathValidator for comprehensive sanitization
+    return PathValidator.sanitize_filename(text, max_length=max_length)
 
 
 def create_filename(subject: str, email_id: str, extension: str = ".md") -> str:
@@ -83,8 +68,16 @@ def ensure_directory(path: Path) -> None:
 
     Raises:
         OSError: If directory cannot be created
+        ValidationError: If path is invalid
     """
     path = Path(path)
+    
+    # Validate path for security
+    try:
+        PathValidator.validate_output_directory(str(path))
+    except ValidationError as e:
+        raise OSError(f"Invalid directory path: {e}")
+    
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
         print(f"Created directory: {path}")
@@ -108,11 +101,36 @@ def write_markdown_file(
     Raises:
         FileExistsError: If file exists and overwrite is False
         OSError: If file cannot be written
+        ValidationError: If path is invalid
     """
     output_dir = Path(output_dir)
+    audit_logger = get_audit_logger()
+    
+    # Validate output directory
+    try:
+        validated_dir = PathValidator.validate_output_directory(str(output_dir))
+        output_dir = validated_dir
+    except ValidationError as e:
+        error_msg = f"Invalid output directory: {e}"
+        if audit_logger:
+            audit_logger.log_validation_error('output_dir', str(output_dir), error_msg)
+        raise OSError(error_msg)
+    
+    # Sanitize filename
+    filename = PathValidator.sanitize_filename(filename)
+    
     ensure_directory(output_dir)
 
     file_path = output_dir / filename
+    
+    # Validate final file path
+    try:
+        PathValidator.validate_file_path(filename, str(output_dir))
+    except ValidationError as e:
+        error_msg = f"Invalid file path: {e}"
+        if audit_logger:
+            audit_logger.log_validation_error('file_path', filename, error_msg)
+        raise OSError(error_msg)
 
     # Check if file exists
     if file_path.exists() and not overwrite:
@@ -133,7 +151,10 @@ def write_markdown_file(
         file_path.write_text(content, encoding="utf-8")
         return file_path
     except Exception as e:
-        raise OSError(f"Failed to write file {file_path}: {e}")
+        error_msg = f"Failed to write file {file_path}: {e}"
+        if audit_logger:
+            audit_logger.log_file_error('write', str(file_path), error_msg)
+        raise OSError(error_msg)
 
 
 def format_size(size_bytes: int) -> str:
